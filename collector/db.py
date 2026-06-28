@@ -25,12 +25,14 @@ _USE_TURSO = bool(_TURSO_URL and _TURSO_TOKEN)
 class DualAccessRow(dict):
     """Mimics sqlite3.Row to support both string keys and integer indices."""
     def __init__(self, cols, row):
-        super().__init__(zip(cols, row))
-        self._row = row
+        # Extract values into a pure list to avoid any native libsql type issues
+        values = list(row.values()) if isinstance(row, dict) else list(row)
+        super().__init__(zip(cols, values))
+        self._values = values
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            return self._row[key]
+            return self._values[key]
         return super().__getitem__(key)
 
 
