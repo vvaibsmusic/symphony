@@ -1,6 +1,5 @@
 # Symphony Music Dashboard — Hugging Face Spaces Dockerfile
-# Serves static Next.js frontend via nginx and FastAPI backend via uvicorn
-# on a single port (7860) for HF Spaces compatibility.
+# Serves Next.js frontend and FastAPI backend on a single port (7860) for HF Spaces compatibility.
 
 FROM python:3.11-slim
 
@@ -8,8 +7,7 @@ FROM python:3.11-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
-        gnupg \
-        nginx && \
+        gnupg && \
     # Install Node.js 20
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
@@ -29,49 +27,29 @@ RUN pip install --no-cache-dir -r api/requirements.txt && \
 WORKDIR /app/frontend
 RUN npm ci && npm run build
 
-# ── Nginx configuration (port 7860) ──────────────────────────────────────────
-RUN cat > /etc/nginx/sites-available/default <<'EOF'
-server {
-    listen 7860;
-    server_name _;
-
-    # Proxy API requests to the FastAPI backend
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Proxy everything else to Next.js
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-EOF
-
 # ── Startup script ───────────────────────────────────────────────────────────
 RUN cat > /app/start.sh <<'EOF'
 #!/bin/bash
 set -e
 
-# Start nginx in the background
-nginx -g 'daemon off;' &
-
-# Start the Next.js frontend in the background
-cd /app/frontend
-npm start &
-
-# Start the FastAPI backend in the foreground
+# Start the FastAPI backend in the background on port 8000
 cd /app/api
-exec uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --host 127.0.0.1 --port 8000 &
+
+# Start the Next.js frontend in the foreground on port 7860
+# Next.js will automatically proxy /api to the FastAPI backend
+cd /app/frontend
+export PORT=7860
+exec npm start
 EOF
 RUN chmod +x /app/start.sh
+
+# Set correct permissions for Hugging Face Spaces (user 1000)
+RUN chmod -R 777 /app
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
 
 WORKDIR /app
 
