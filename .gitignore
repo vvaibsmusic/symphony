@@ -1,0 +1,50 @@
+# Project
+.DS_Store
+*.db
+*.sqlite
+*.sqlite3
+.env
+
+# Python / Backend
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+
+# Node.js / Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.vercel/
+frontend/.env*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/.pnp.*
+frontend/.swc/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+frontend/public/logo.png
+frontend/src/app/favicon.ico
+db/.fuse_hidden*

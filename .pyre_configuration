@@ -1,0 +1,10 @@
+{
+  "source_directories": [
+    "api",
+    "collector"
+  ],
+  "search_path": [
+    "api",
+    "collector"
+  ]
+}
