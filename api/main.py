@@ -882,60 +882,45 @@ def get_artists(
 
     # Get artists with computed columns
     rows = conn.execute(f"""
-        SELECT
+        WITH latest_snapshots AS (
+            SELECT song_id, MAX(id) as max_id
+            FROM play_snapshots
+            GROUP BY song_id
+        ),
+        song_stats AS (
+            SELECT 
+                s.artist_id,
+                COUNT(CASE WHEN s.platform = 'youtube' THEN 1 END) as yt_song_count,
+                COUNT(CASE WHEN s.platform = 'spotify' THEN 1 END) as spotify_song_count,
+                SUM(CASE WHEN s.platform = 'youtube' THEN ps.play_count ELSE 0 END) as total_yt_views,
+                SUM(CASE WHEN s.platform = 'youtube' THEN ps.like_count ELSE 0 END) as total_yt_likes,
+                SUM(CASE WHEN s.platform = 'youtube' THEN ps.comment_count ELSE 0 END) as total_yt_comments,
+                MAX(CASE WHEN s.platform = 'youtube' THEN s.release_date END) as latest_release
+            FROM songs s
+            LEFT JOIN latest_snapshots ls ON s.id = ls.song_id
+            LEFT JOIN play_snapshots ps ON ls.max_id = ps.id
+            GROUP BY s.artist_id
+        )
+        SELECT 
             a.*,
-            (SELECT COUNT(*) FROM songs WHERE artist_id = a.id AND platform = 'youtube') as yt_song_count,
-            (SELECT COUNT(*) FROM songs WHERE artist_id = a.id AND platform = 'spotify') as spotify_song_count,
-            (SELECT SUM(ps.play_count) FROM play_snapshots ps
-             JOIN songs s ON ps.song_id = s.id
-             WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-             AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-            ) as total_yt_views,
-            (SELECT SUM(ps.like_count) FROM play_snapshots ps
-             JOIN songs s ON ps.song_id = s.id
-             WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-             AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-            ) as total_yt_likes,
-            (SELECT SUM(ps.comment_count) FROM play_snapshots ps
-             JOIN songs s ON ps.song_id = s.id
-             WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-             AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-            ) as total_yt_comments,
-            CASE WHEN (SELECT SUM(ps.play_count) FROM play_snapshots ps
-                 JOIN songs s ON ps.song_id = s.id
-                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-                ) > 0
-            THEN ROUND(CAST(
-                (SELECT SUM(ps.like_count) + SUM(ps.comment_count) FROM play_snapshots ps
-                 JOIN songs s ON ps.song_id = s.id
-                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-                ) AS REAL) * 100.0 / (SELECT SUM(ps.play_count) FROM play_snapshots ps
-                 JOIN songs s ON ps.song_id = s.id
-                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-                ), 2)
-            ELSE NULL END as engagement_rate,
-            CASE WHEN (SELECT SUM(ps.like_count) FROM play_snapshots ps
-                 JOIN songs s ON ps.song_id = s.id
-                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-                ) > 0
-            THEN CAST((SELECT SUM(ps.play_count) FROM play_snapshots ps
-                 JOIN songs s ON ps.song_id = s.id
-                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-                ) AS REAL) / (SELECT SUM(ps.like_count) FROM play_snapshots ps
-                 JOIN songs s ON ps.song_id = s.id
-                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
-                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-                )
-            ELSE NULL END as views_per_like,
-            (SELECT MAX(s.release_date) FROM songs s
-             WHERE s.artist_id = a.id AND s.platform = 'youtube'
-            ) as latest_release
+            COALESCE(ss.yt_song_count, 0) as yt_song_count,
+            COALESCE(ss.spotify_song_count, 0) as spotify_song_count,
+            COALESCE(ss.total_yt_views, 0) as total_yt_views,
+            COALESCE(ss.total_yt_likes, 0) as total_yt_likes,
+            COALESCE(ss.total_yt_comments, 0) as total_yt_comments,
+            CASE 
+                WHEN COALESCE(ss.total_yt_views, 0) > 0 
+                THEN ROUND(CAST((COALESCE(ss.total_yt_likes, 0) + COALESCE(ss.total_yt_comments, 0)) AS REAL) * 100.0 / ss.total_yt_views, 2)
+                ELSE NULL 
+            END as engagement_rate,
+            CASE 
+                WHEN COALESCE(ss.total_yt_likes, 0) > 0 
+                THEN CAST(ss.total_yt_views AS REAL) / ss.total_yt_likes
+                ELSE NULL 
+            END as views_per_like,
+            ss.latest_release
         FROM artists a
+        LEFT JOIN song_stats ss ON a.id = ss.artist_id
         {where_sql}
         ORDER BY {order_col} {order_dir} {nulls_last}
         LIMIT ? OFFSET ?
