@@ -32,9 +32,9 @@ RUN cat > /app/start.sh <<'EOF'
 #!/bin/bash
 set -e
 
-# Start the FastAPI backend in the background on port 8000
+# Start the FastAPI backend in the background on port 8000 and capture logs
 cd /app/api
-uvicorn main:app --host 127.0.0.1 --port 8000 &
+uvicorn main:app --host 127.0.0.1 --port 8000 > /app/frontend/public/uvicorn.log 2>&1 &
 
 # Start the Next.js frontend in the foreground on port 7860
 # Next.js will automatically proxy /api to the FastAPI backend
