@@ -1095,7 +1095,8 @@ def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
     artist_metrics = compute_artist_metrics(conn, artist_id, platform)
 
     # Enrich each song with track-level metrics
-    enriched_songs = [enrich_song_with_metrics(conn, dict(s), platform) for s in songs]
+    from metrics import enrich_songs_bulk
+    enriched_songs = enrich_songs_bulk(conn, [dict(s) for s in songs], artist_id, platform)
 
     conn.close()
     return {

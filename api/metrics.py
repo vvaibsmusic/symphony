@@ -343,6 +343,37 @@ def enrich_song_with_metrics(conn, song_dict, platform="youtube"):
     )
     return song_dict
 
+def enrich_songs_bulk(conn, songs_list, artist_id, platform="youtube"):
+    """Enrich multiple songs for an artist in a single query to avoid N+1."""
+    if not songs_list:
+        return []
+    
+    snapshots = conn.execute("""
+        SELECT * FROM (
+            SELECT 
+                ps.song_id, ps.play_count, ps.like_count, ps.comment_count, ps.collected_at, ps.cycle_id,
+                ROW_NUMBER() OVER (PARTITION BY ps.song_id ORDER BY ps.collected_at DESC) as rn
+            FROM play_snapshots ps
+            JOIN songs s ON ps.song_id = s.id
+            WHERE s.artist_id = ? AND ps.platform = ?
+        ) WHERE rn <= 30
+    """, (artist_id, platform)).fetchall()
+    
+    # Group snapshots by song_id
+    from collections import defaultdict
+    snaps_by_song = defaultdict(list)
+    for s in snapshots:
+        snaps_by_song[s["song_id"]].append(dict(s))
+        
+    for song in songs_list:
+        song_id = song.get("id")
+        if song_id and song_id in snaps_by_song:
+            song["metrics"] = compute_track_metrics(snaps_by_song[song_id])
+        else:
+            song["metrics"] = _empty_metrics()
+            
+    return songs_list
+
 
 def enrich_viral_alert(conn, alert_dict):
     """Add engagement/loyalty deltas to a viral alert."""
