@@ -106,6 +106,7 @@ def debug_env():
         "use_turso": _USE_TURSO,
         "db_turso_url": _TURSO_URL or "NOT SET",
         "turso_url_prefix": url[:30] if url != "NOT SET" else "NOT SET",
+        "all_env_keys": list(os.environ.keys()),
     }
 
 
