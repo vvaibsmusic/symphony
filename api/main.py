@@ -30,6 +30,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import JSONResponse
+import traceback
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "traceback": traceback.format_exc()}
+    )
+
 # Track background collector process
 _collector_state: dict[str, Any] = {"running": False, "started_at": None, "pid": None, "type": None}
 
