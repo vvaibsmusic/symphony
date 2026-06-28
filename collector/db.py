@@ -68,21 +68,25 @@ class LibsqlDictConnection:
         self.conn.commit()
 
     def close(self):
-        # some versions of libsql don't have close, use safe getattr
-        if hasattr(self.conn, "close"):
-            self.conn.close()
+        # Do not close the connection so it can be pooled globally across requests
+        pass
+
+_TURSO_GLOBAL_CONN = None
 
 def get_connection():
     """Get a SQLite connection with WAL mode for better concurrency."""
+    global _TURSO_GLOBAL_CONN
     if _USE_TURSO:
         if libsql is None:
             raise ImportError(
                 "libsql_experimental is required for Turso connections. "
                 "Install it with: pip install libsql-experimental"
             )
-        safe_url = _TURSO_URL.replace("libsql://", "https://").replace("wss://", "https://")
-        conn = libsql.connect(safe_url, auth_token=_TURSO_TOKEN)
-        return LibsqlDictConnection(conn)
+        if _TURSO_GLOBAL_CONN is None:
+            safe_url = _TURSO_URL.replace("libsql://", "https://").replace("wss://", "https://")
+            conn = libsql.connect(safe_url, auth_token=_TURSO_TOKEN)
+            _TURSO_GLOBAL_CONN = LibsqlDictConnection(conn)
+        return _TURSO_GLOBAL_CONN
     else:
         # Local SQLite fallback for development
         conn = sqlite3.connect(str(DB_PATH))
