@@ -57,6 +57,8 @@ class LibsqlDictConnection:
         self.conn = conn
 
     def execute(self, sql, params=()):
+        if isinstance(params, list):
+            params = tuple(params)
         return LibsqlDictCursor(self.conn.execute(sql, params))
 
     def executescript(self, sql):
