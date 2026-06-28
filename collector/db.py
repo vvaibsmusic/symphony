@@ -79,30 +79,29 @@ def init_db():
     """Initialize the database from schema.sql and run migrations."""
     if not _USE_TURSO:
         os.makedirs(DB_PATH.parent, exist_ok=True)
-    conn = get_connection()
-    with open(SCHEMA_PATH, "r") as f:
-        conn.executescript(f.read())
+        conn = get_connection()
+        with open(SCHEMA_PATH, "r") as f:
+            conn.executescript(f.read())
 
-    # Migration: add cycle_id if missing
-    cols = [row["name"] for row in conn.execute("PRAGMA table_info(play_snapshots)").fetchall()]
-    if "cycle_id" not in cols:
-        conn.execute("ALTER TABLE play_snapshots ADD COLUMN cycle_id TEXT")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_cycle ON play_snapshots(cycle_id)")
-        conn.commit()
-        print("[migration] Added cycle_id to play_snapshots")
+        # Migration: add cycle_id if missing
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(play_snapshots)").fetchall()]
+        if "cycle_id" not in cols:
+            conn.execute("ALTER TABLE play_snapshots ADD COLUMN cycle_id TEXT")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_cycle ON play_snapshots(cycle_id)")
+            conn.commit()
+            print("[migration] Added cycle_id to play_snapshots")
 
-    # Migration: add ytmusic_play_count if missing
-    cols = [row["name"] for row in conn.execute("PRAGMA table_info(play_snapshots)").fetchall()]
-    if "ytmusic_play_count" not in cols:
-        conn.execute("ALTER TABLE play_snapshots ADD COLUMN ytmusic_play_count INTEGER")
-        conn.commit()
-        print("[migration] Added ytmusic_play_count to play_snapshots")
+        # Migration: add ytmusic_play_count if missing
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(play_snapshots)").fetchall()]
+        if "ytmusic_play_count" not in cols:
+            conn.execute("ALTER TABLE play_snapshots ADD COLUMN ytmusic_play_count INTEGER")
+            conn.commit()
+            print("[migration] Added ytmusic_play_count to play_snapshots")
 
-    conn.close()
-    if _USE_TURSO:
-        print(f"Database initialized at {_TURSO_URL}")
-    else:
+        conn.close()
         print(f"Database initialized at {DB_PATH}")
+    else:
+        print(f"Connected to Turso at {_TURSO_URL}")
 
 
 def upsert_artist(conn, artist: dict):
