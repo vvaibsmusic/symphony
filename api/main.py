@@ -94,6 +94,21 @@ def startup():
     sched_thread.start()
 
 
+@app.get("/api/debug/env")
+def debug_env():
+    """Temporary debug: check if Turso env vars are set."""
+    url = os.environ.get("TURSO_DATABASE_URL", "NOT SET")
+    token = os.environ.get("TURSO_AUTH_TOKEN", "NOT SET")
+    from db import _USE_TURSO, _TURSO_URL
+    return {
+        "turso_url_set": url != "NOT SET",
+        "turso_token_set": token != "NOT SET",
+        "use_turso": _USE_TURSO,
+        "db_turso_url": _TURSO_URL or "NOT SET",
+        "turso_url_prefix": url[:30] if url != "NOT SET" else "NOT SET",
+    }
+
+
 @app.get("/api/scheduler/status")
 def get_scheduler_status():
     """Check daily auto-refresh scheduler status."""
