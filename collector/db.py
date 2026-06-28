@@ -64,7 +64,8 @@ def get_connection():
                 "libsql_experimental is required for Turso connections. "
                 "Install it with: pip install libsql-experimental"
             )
-        conn = libsql.connect(_TURSO_URL, auth_token=_TURSO_TOKEN)
+        safe_url = _TURSO_URL.replace("libsql://", "https://").replace("wss://", "https://")
+        conn = libsql.connect(safe_url, auth_token=_TURSO_TOKEN)
         return LibsqlDictConnection(conn)
     else:
         # Local SQLite fallback for development
