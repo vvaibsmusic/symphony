@@ -125,6 +125,31 @@ def init_db():
         print(f"Connected to Turso at {_TURSO_URL}")
 
 
+def ensure_indexes():
+    """Create performance indexes if they don't exist."""
+    conn = get_connection()
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_song_platform_date ON play_snapshots(song_id, platform, collected_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_songs_artist_platform ON songs(artist_id, platform)",
+        "CREATE INDEX IF NOT EXISTS idx_alerts_platform ON viral_alerts(platform)",
+        "CREATE INDEX IF NOT EXISTS idx_artists_spotify_id ON artists(spotify_id)",
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_platform_song ON play_snapshots(platform, song_id)",
+        "CREATE INDEX IF NOT EXISTS idx_artists_watched ON artists(is_watched)",
+    ]
+    for idx_sql in indexes:
+        try:
+            conn.execute(idx_sql)
+            conn.commit()
+        except Exception as e:
+            print(f"[indexes] Skipping: {e}")
+    print("[indexes] Performance indexes ensured.")
+
+# Auto-create indexes on import
+try:
+    ensure_indexes()
+except Exception:
+    pass
+
 def upsert_artist(conn, artist: dict):
     """Insert or update an artist."""
     conn.execute(

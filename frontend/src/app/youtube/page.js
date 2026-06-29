@@ -176,7 +176,7 @@ export default function YouTubeDashboard() {
     const toggleWatch = async (artistId) => {
         try {
             await fetch(`${API}/api/artist/${artistId}/watch`, { method: "POST" });
-            fetchArtists(); fetchData();
+            fetchArtists();
         } catch (e) { console.error(e); }
     };
 
@@ -185,13 +185,14 @@ export default function YouTubeDashboard() {
         try {
             await fetch(`${API}/api/refresh/${type}`, { method: "POST" });
             const poll = setInterval(async () => {
-                const res = await fetch(`${API}/api/refresh/status`).then(r => r.json());
-                if (!res.running) {
-                    clearInterval(poll); setRefreshing(false);
-                    fetchData(); fetchArtists();
-                    // Re-fetch quota after stats refresh
-                    if (type === "stats") fetch(`${API}/api/quota`).then(r => r.json()).then(q => setQuota(q)).catch(() => { });
-                }
+                try {
+                    const res = await fetch(`${API}/api/refresh/status`).then(r => r.json());
+                    if (!res.running) {
+                        clearInterval(poll); setRefreshing(false);
+                        fetchData(); fetchArtists();
+                        if (type === "stats") fetch(`${API}/api/quota`).then(r => r.json()).then(q => setQuota(q)).catch(() => { });
+                    }
+                } catch { clearInterval(poll); setRefreshing(false); }
             }, 5000);
         } catch (e) { console.error(e); setRefreshing(false); }
     };
@@ -621,6 +622,7 @@ export default function YouTubeDashboard() {
                                                             <img
                                                                 src={a.image_url}
                                                                 alt={a.name}
+                                                                loading="lazy"
                                                                 style={{
                                                                     width: 36, height: 36, borderRadius: "50%",
                                                                     objectFit: "cover", flexShrink: 0
