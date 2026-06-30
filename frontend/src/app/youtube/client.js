@@ -155,7 +155,8 @@ export default function YouTubeDashboard() {
         { label: 'TOTAL ARTISTS', val: formatNumber(stats?.total_artists || 0), delta: '+4 wk', color: '#E9E9F2', spark: sp([60,62,61,66,68,70,72,78]) },
     ];
 
-    const hot = viral.slice(0, 5).map(v => ({
+    const hot = (viral || []).slice(0, 5).map(v => ({
+        id: v.artist_id,
         title: (v.title || "").split(' (')[0],
         artist: v.artist_name,
         mult: v.growth_factor ? `${v.growth_factor}x` : '2.1x',
@@ -167,6 +168,7 @@ export default function YouTubeDashboard() {
     }));
 
     const fresh = releases.slice(0, 5).map(r => ({
+        id: r.artist_id,
         title: (r.title || "").split(' (')[0],
         artist: r.artist_name,
         date: formatDate(r.release_date),
@@ -315,7 +317,7 @@ export default function YouTubeDashboard() {
                     </div>
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
                         {hot.length > 0 ? hot.map((h, idx) => (
-                            <div key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none" }}>
+                            <Link href={`/artist/${h.id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                                 <div style={{ width: "42px", height: "42px", borderRadius: "9px", background: h.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px", color: "rgba(255,255,255,.88)" }}>{h.ini}</div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h.title}</div>
@@ -324,7 +326,7 @@ export default function YouTubeDashboard() {
                                 <svg width="70" height="24" viewBox="0 0 100 30" preserveAspectRatio="none" style={{ flex: "none" }}><polyline points={h.spark} fill="none" stroke="#FF5238" strokeWidth="3" strokeLinejoin="round"></polyline></svg>
                                 <div style={{ font: "600 11px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.5)", width: "108px", textAlign: "right", flex: "none" }}>{h.from} → {h.to}</div>
                                 <div style={{ background: "rgba(255,82,56,.14)", color: "#FF6A52", font: "700 12px ui-monospace,Menlo,monospace", padding: "5px 9px", borderRadius: "7px", flex: "none", width: "62px", textAlign: "center" }}>{h.mult}</div>
-                            </div>
+                            </Link>
                         )) : (
                             <div style={{ padding: "16px", textAlign: "center", color: "rgba(255,255,255,.4)", fontSize: "13px" }}>No viral alerts right now.</div>
                         )}
@@ -339,14 +341,14 @@ export default function YouTubeDashboard() {
                     </div>
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
                         {fresh.length > 0 ? fresh.map((n, idx) => (
-                            <div key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none" }}>
+                            <Link href={`/artist/${n.id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                                 <div style={{ width: "42px", height: "42px", borderRadius: "9px", background: n.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px", color: "rgba(255,255,255,.88)" }}>{n.ini}</div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.title}</div>
                                     <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.45)" }}>{n.artist} · {n.date}</div>
                                 </div>
                                 <div style={{ background: "rgba(52,199,89,.14)", color: "#5BE08A", font: "700 9px ui-monospace,Menlo,monospace", padding: "4px 8px", borderRadius: "6px", flex: "none", letterSpacing: ".5px" }}>NEW</div>
-                            </div>
+                            </Link>
                         )) : (
                             <div style={{ padding: "16px", textAlign: "center", color: "rgba(255,255,255,.4)", fontSize: "13px" }}>No recent releases found.</div>
                         )}
@@ -400,7 +402,7 @@ export default function YouTubeDashboard() {
                     <div>#</div><div>ARTIST</div><div>GENRE</div><div>REGION</div><div style={{ textAlign: "right" }}>SONGS</div><div style={{ textAlign: "right" }}>VIEWS</div><div>7-DAY</div><div>LATEST</div><div></div>
                 </div>
                 {rows.length > 0 ? rows.map(a => (
-                    <Link href={`/youtube/artist/${a.id}`} key={a.id} style={{ display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", alignItems: "center", padding: "13px 18px", borderTop: "1px solid rgba(255,255,255,.05)", cursor: "pointer", textDecoration: "none", color: "inherit", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                    <Link href={`/artist/${a.id}`} key={a.id} style={{ display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", alignItems: "center", padding: "13px 18px", borderTop: "1px solid rgba(255,255,255,.05)", cursor: "pointer", textDecoration: "none", color: "inherit", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                         <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "15px" }}>{a.medal}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                             <div style={{ width: "34px", height: "34px", borderRadius: "50%", background: a.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "13px", color: "rgba(255,255,255,.92)" }}>{a.ini}</div>
