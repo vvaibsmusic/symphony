@@ -89,12 +89,12 @@ function MultiSelect({ label, options, selected, onChange }) {
     );
 }
 
-export default function YouTubeDashboardClient({ initialDashboard, initialArtists }) {
-    const [artists, setArtists] = useState(initialArtists?.artists || []);
-    const [stats, setStats] = useState(initialDashboard?.stats || null);
-    const [viral, setViral] = useState(initialDashboard?.viral?.viral || []);
-    const [releases, setReleases] = useState(initialDashboard?.releases || { watched: [], other: [] });
-    const [filterOptions, setFilterOptions] = useState(initialDashboard?.filters || { genres: [], regions: [] });
+export default function YouTubeDashboard() {
+    const [viral, setViral] = useState([]);
+    const [releases, setReleases] = useState([]);
+    const [artists, setArtists] = useState([]);
+    const [stats, setStats] = useState(null);
+    const [filterOptions, setFilterOptions] = useState({ genres: [], regions: [] });
     const [search, setSearch] = useState("");
     const [genres, setGenres] = useState([]);
     const [regions, setRegions] = useState([]);
@@ -102,15 +102,26 @@ export default function YouTubeDashboardClient({ initialDashboard, initialArtist
     const [sortDir, setSortDir] = useState("desc");
     const [watchedOnly, setWatchedOnly] = useState(false);
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(initialArtists?.pages || 1);
-    const [total, setTotal] = useState(initialArtists?.total || 0);
-    const [loading, setLoading] = useState(false);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [showLoadingScreen, setShowLoadingScreen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+
+    useEffect(() => {
+        let timer;
+        if (loading) {
+            timer = setTimeout(() => setShowLoadingScreen(true), 500);
+        } else {
+            setShowLoadingScreen(false);
+        }
+        return () => clearTimeout(timer);
+    }, [loading]);
     const [addUrl, setAddUrl] = useState("");
     const [addingArtist, setAddingArtist] = useState(false);
     const [addMsg, setAddMsg] = useState(null);
     const [showAddForm, setShowAddForm] = useState(false);
-    const [quota, setQuota] = useState(initialDashboard?.quota || null);
+    const [quota, setQuota] = useState(null);
     const [globalQ, setGlobalQ] = useState("");
     const [globalResults, setGlobalResults] = useState(null);
     const globalRef = useRef(null);
@@ -164,14 +175,8 @@ export default function YouTubeDashboardClient({ initialDashboard, initialArtist
         setLoading(false);
     }, [page, search, genres, regions, sortBy, sortDir, watchedOnly]);
 
-    const isFirstMount = useRef(true);
-    useEffect(() => { 
-        if (isFirstMount.current) {
-            isFirstMount.current = false;
-            return;
-        }
-        fetchArtists(); 
-    }, [fetchArtists]);
+    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchArtists(); }, [fetchArtists]);
 
     const toggleWatch = async (artistId) => {
         try {
@@ -567,154 +572,137 @@ export default function YouTubeDashboardClient({ initialDashboard, initialArtist
                 </div>
 
                 {/* Leaderboard Table */}
-                {loading ? (
-                    <div className="loading"><div className="spinner"></div>Loading...</div>
-                ) : artists.length === 0 ? (
-                    <div className="empty-state"><div className="emoji">🔍</div><p>No artists match your filters.</p></div>
-                ) : (
-                    <>
-                        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "70vh", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)" }}>
-                            <table style={{
-                                width: "100%", borderCollapse: "separate", borderSpacing: 0,
-                                fontSize: "0.85rem", fontFamily: "Inter, sans-serif",
-                            }}>
-                                <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-                                    <tr>
-                                        {["#", "Artist", "Genre", "Region", "Songs", "Total Views", "Latest Release", ""].map((h, i) => (
-                                            <th key={i} style={{
-                                                padding: "10px 12px", textAlign: i >= 4 ? "right" : "left",
-                                                fontWeight: 600, color: "var(--text-muted)", fontSize: "0.75rem",
-                                                textTransform: "uppercase", letterSpacing: "0.04em",
-                                                borderBottom: "1px solid var(--border-subtle)",
-                                                background: "var(--bg-secondary)",
-                                                whiteSpace: "nowrap",
-                                            }}>{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {artists.map((a, idx) => {
-                                        const rank = (page - 1) * 50 + idx + 1;
-                                        return (
-                                            <tr key={a.id} style={{
-                                                borderBottom: "1px solid var(--border-subtle)",
-                                                transition: "background 0.12s ease",
-                                            }}
-                                                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
-                                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                                            >
-                                                {/* Rank */}
-                                                <td style={{
-                                                    padding: "10px 12px", fontWeight: 700, width: 40,
-                                                    color: rank <= 3 ? "var(--yt-red)" : "var(--text-muted)",
-                                                    fontSize: rank <= 3 ? "1rem" : "0.85rem",
-                                                }}>
-                                                    {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : rank}
-                                                </td>
-
-                                                {/* Artist name + avatar */}
-                                                <td style={{ padding: "10px 12px" }}>
-                                                    <Link href={`/artist/${a.id}`} style={{
-                                                        display: "flex", alignItems: "center", gap: 10,
-                                                        textDecoration: "none", color: "var(--text-primary)",
-                                                    }}>
-                                                        {a.image_url ? (
-                                                            <img
-                                                                src={a.image_url}
-                                                                alt={a.name}
-                                                                loading="lazy"
-                                                                style={{
-                                                                    width: 36, height: 36, borderRadius: "50%",
-                                                                    objectFit: "cover", flexShrink: 0
-                                                                }}
-                                                            />
-                                                        ) : (
-                                                            <div style={{
-                                                                width: 36, height: 36, borderRadius: "50%",
-                                                                background: "linear-gradient(135deg, var(--yt-red), #ff6b6b)",
-                                                                display: "flex", alignItems: "center", justifyContent: "center",
-                                                                fontWeight: 700, fontSize: "0.85rem", color: "white", flexShrink: 0,
-                                                            }}>
-                                                                {a.name.charAt(0)}
-                                                            </div>
-                                                        )}
-                                                        <span style={{ fontWeight: 600 }}>{a.name}</span>
-                                                    </Link>
-                                                </td>
-
-                                                {/* Genre */}
-                                                <td style={{ padding: "10px 12px" }}>
-                                                    <span style={{
-                                                        padding: "2px 8px", borderRadius: "12px", fontSize: "0.72rem",
-                                                        background: "rgba(255,255,255,0.06)", color: "var(--text-secondary)",
-                                                    }}>{a.genre || "—"}</span>
-                                                </td>
-
-                                                {/* Region */}
-                                                <td style={{ padding: "10px 12px", color: "var(--text-secondary)", fontSize: "0.82rem" }}>
-                                                    {a.region ? `📍 ${a.region}` : "—"}
-                                                </td>
-
-                                                {/* Songs */}
-                                                <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--text-primary)" }}>
-                                                    {a.yt_song_count || 0}
-                                                </td>
-
-                                                {/* Views */}
-                                                <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: a.total_yt_views ? "var(--text-primary)" : "var(--text-muted)" }}>
-                                                    {a.total_yt_views ? formatNumber(a.total_yt_views) : "—"}
-                                                </td>
-
-                                                {/* Latest Release */}
-                                                <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontSize: "0.8rem" }}>
-                                                    {formatDate(a.latest_release)}
-                                                </td>
-
-                                                {/* Watch + Delete */}
-                                                <td style={{ padding: "10px 6px", width: 70, whiteSpace: "nowrap" }}>
-                                                    <button onClick={(e) => { e.preventDefault(); toggleWatch(a.id); }} style={{
-                                                        background: "none", border: "none",
-                                                        color: a.is_watched ? "#ef4444" : "var(--text-muted)",
-                                                        fontSize: "1.1rem", cursor: "pointer", padding: "2px 4px",
-                                                        transition: "transform 0.15s ease",
-                                                    }}
-                                                        onMouseEnter={e => e.currentTarget.style.transform = "scale(1.2)"}
-                                                        onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
-                                                        title={a.is_watched ? "Unwatch" : "Watch"}>
-                                                        {a.is_watched ? "♥" : "♡"}
-                                                    </button>
-                                                    <button onClick={(e) => { e.preventDefault(); deleteArtist(a.id, a.name); }} style={{
-                                                        background: "none", border: "none",
-                                                        color: "var(--text-muted)",
-                                                        fontSize: "0.9rem", cursor: "pointer", padding: "2px 4px",
-                                                        transition: "all 0.15s ease", opacity: 0.4,
-                                                    }}
-                                                        onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.color = "#ef4444"; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.opacity = "0.4"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                                                        title="Remove artist">
-                                                        🗑
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                <div style={{ position: "relative" }}>
+                    {showLoadingScreen && (
+                        <div style={{
+                            position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                            background: "rgba(10, 10, 10, 0.6)", backdropFilter: "blur(4px)",
+                            zIndex: 50, display: "flex", flexDirection: "column",
+                            alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-lg)",
+                            minHeight: "300px"
+                        }}>
+                            <div className="spinner" style={{ width: "40px", height: "40px", marginBottom: "1rem" }}></div>
+                            <div style={{ color: "var(--text-primary)", fontWeight: 500, letterSpacing: "1px" }}>LOADING...</div>
                         </div>
-
-                        {totalPages > 1 && (
-                            <div className="pagination">
-                                <button disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>
-                                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                                    const p = i + 1;
-                                    return <button key={p} className={p === page ? "active" : ""} onClick={() => setPage(p)}>{p}</button>;
-                                })}
-                                {totalPages > 7 && <span style={{ color: "var(--text-muted)" }}>...</span>}
-                                <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next →</button>
+                    )}
+                    
+                    {artists.length === 0 && !loading ? (
+                        <div className="empty-state"><div className="emoji">🔍</div><p>No artists match your filters.</p></div>
+                    ) : (
+                        <>
+                            <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "70vh", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", minHeight: loading && artists.length === 0 ? "300px" : "auto" }}>
+                                <table style={{
+                                    width: "100%", borderCollapse: "separate", borderSpacing: 0,
+                                    fontSize: "0.85rem", fontFamily: "Inter, sans-serif",
+                                }}>
+                                    <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                                        <tr>
+                                            {["#", "Artist", "Genre", "Region", "Songs", "Total Views", "Latest Release", ""].map((h, i) => (
+                                                <th key={i} style={{
+                                                    padding: "10px 12px", textAlign: i >= 4 ? "right" : "left",
+                                                    fontWeight: 600, color: "var(--text-muted)", fontSize: "0.75rem",
+                                                    textTransform: "uppercase", letterSpacing: "0.04em",
+                                                    borderBottom: "1px solid var(--border-subtle)",
+                                                    background: "var(--bg-secondary)",
+                                                    whiteSpace: "nowrap",
+                                                }}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {artists.map((a, i) => {
+                                            const rank = (page - 1) * 50 + i + 1;
+                                            return (
+                                                <tr key={a.id} style={{ transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                                    <td style={{ padding: "10px 12px", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{rank}</td>
+                                                    <td style={{ padding: "10px 12px", minWidth: 200 }}>
+                                                        <Link href={`/youtube/artist/${a.id}`} style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "inherit" }}>
+                                                            {a.image_url ? (
+                                                                <img
+                                                                    src={a.image_url.replace("=s800", "=s88")}
+                                                                    alt={a.name}
+                                                                    loading="lazy"
+                                                                    style={{
+                                                                        width: 36, height: 36, borderRadius: "50%",
+                                                                        objectFit: "cover", flexShrink: 0
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <div style={{
+                                                                    width: 36, height: 36, borderRadius: "50%",
+                                                                    background: "linear-gradient(135deg, var(--yt-red), #ff6b6b)",
+                                                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                                                    fontWeight: 700, fontSize: "0.85rem", color: "white", flexShrink: 0,
+                                                                }}>
+                                                                    {a.name.charAt(0)}
+                                                                </div>
+                                                            )}
+                                                            <span style={{ fontWeight: 600 }}>{a.name}</span>
+                                                        </Link>
+                                                    </td>
+                                                    <td style={{ padding: "10px 12px" }}>
+                                                        <span style={{
+                                                            padding: "2px 8px", borderRadius: "12px", fontSize: "0.72rem",
+                                                            background: "rgba(255,255,255,0.06)", color: "var(--text-secondary)",
+                                                        }}>{a.genre || "—"}</span>
+                                                    </td>
+                                                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)", fontSize: "0.82rem" }}>
+                                                        {a.region ? `📍 ${a.region}` : "—"}
+                                                    </td>
+                                                    <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--text-primary)" }}>
+                                                        {a.yt_song_count || 0}
+                                                    </td>
+                                                    <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: a.total_yt_views ? "var(--text-primary)" : "var(--text-muted)" }}>
+                                                        {a.total_yt_views ? formatNumber(a.total_yt_views) : "—"}
+                                                    </td>
+                                                    <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-muted)", fontSize: "0.8rem" }}>
+                                                        {formatDate(a.latest_release)}
+                                                    </td>
+                                                    <td style={{ padding: "10px 6px", width: 70, whiteSpace: "nowrap" }}>
+                                                        <button onClick={(e) => { e.preventDefault(); toggleWatch(a.id); }} style={{
+                                                            background: "none", border: "none",
+                                                            color: a.is_watched ? "#ef4444" : "var(--text-muted)",
+                                                            fontSize: "1.1rem", cursor: "pointer", padding: "2px 4px",
+                                                            transition: "transform 0.15s ease",
+                                                        }}
+                                                            onMouseEnter={e => e.currentTarget.style.transform = "scale(1.2)"}
+                                                            onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                                                            title={a.is_watched ? "Unwatch" : "Watch"}>
+                                                            {a.is_watched ? "♥" : "♡"}
+                                                        </button>
+                                                        <button onClick={(e) => { e.preventDefault(); deleteArtist(a.id, a.name); }} style={{
+                                                            background: "none", border: "none",
+                                                            color: "var(--text-muted)",
+                                                            fontSize: "0.9rem", cursor: "pointer", padding: "2px 4px",
+                                                            transition: "all 0.15s ease", opacity: 0.4,
+                                                        }}
+                                                            onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.color = "#ef4444"; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.opacity = "0.4"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                                                            title="Remove artist">
+                                                            🗑
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
-                        )}
-                    </>
-                )}
+
+                            {totalPages > 1 && (
+                                <div className="pagination">
+                                    <button disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>
+                                    {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                                        const p = i + 1;
+                                        return <button key={p} className={p === page ? "active" : ""} onClick={() => setPage(p)}>{p}</button>;
+                                    })}
+                                    <span>Page {page} of {totalPages} ({total} artists)</span>
+                                    <button disabled={page >= totalPages || loading} onClick={() => setPage(p => p + 1)}>Next →</button>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );
