@@ -25,7 +25,7 @@ function generateSparkline(trend = 1) {
     const dn = [70, 66, 68, 58, 54, 50, 44, 38];
     // add some randomness
     const base = trend >= 0 ? up : dn;
-    return sp(base.map(v => v + (Math.random() * 10 - 5)));
+    return sp(base.map(v => v + ((v % 10) - 5)));
 }
 
 function getInitials(name) {
