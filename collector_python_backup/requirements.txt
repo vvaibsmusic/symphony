@@ -1,0 +1,5 @@
+ytmusicapi>=1.8.0
+google-api-python-client>=2.100.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+libsql-experimental>=0.0.40

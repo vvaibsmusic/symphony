@@ -7,12 +7,19 @@ FROM python:3.11-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
+        wget \
         gnupg && \
     # Install Node.js 20
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
+    # Install Go 1.22
+    wget https://go.dev/dl/go1.22.4.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.22.4.linux-amd64.tar.gz && \
+    rm go1.22.4.linux-amd64.tar.gz && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+ENV PATH=$PATH:/usr/local/go/bin
 
 WORKDIR /app
 
@@ -20,8 +27,11 @@ WORKDIR /app
 COPY . .
 
 # ── Python dependencies ──────────────────────────────────────────────────────
-RUN pip install --no-cache-dir -r api/requirements.txt && \
-    pip install --no-cache-dir -r collector/requirements.txt
+RUN pip install --no-cache-dir -r api/requirements.txt
+
+# ── Build Go binary ──────────────────────────────────────────────────────────
+WORKDIR /app/collector_go
+RUN CGO_ENABLED=0 go build -o youtube_enricher
 
 # ── Build Next.js frontend ───────────────────────────────────────────────────
 WORKDIR /app/frontend

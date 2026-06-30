@@ -3,7 +3,7 @@
 import sys
 import os
 import subprocess
-import threading
+import asyncio
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Any
@@ -17,8 +17,7 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from db import get_connection, init_db
-from metrics import compute_artist_metrics, enrich_song_with_metrics, enrich_viral_alert, enrich_songs_bulk, enrich_viral_alerts_bulk
-from cache import ttl_cache, invalidate_cache
+from metrics import compute_artist_metrics, enrich_song_with_metrics, enrich_viral_alert
 
 app = FastAPI(title="Music Intelligence Dashboard API", version="1.0.0")
 
@@ -30,19 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from starlette.middleware.gzip import GZipMiddleware
-app.add_middleware(GZipMiddleware, minimum_size=500)
-
-from fastapi.responses import JSONResponse
-import traceback
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal Server Error", "traceback": traceback.format_exc()}
-    )
 
 # Track background collector process
 _collector_state: dict[str, Any] = {"running": False, "started_at": None, "pid": None, "type": None}
@@ -71,41 +57,39 @@ def _seconds_until_next_10am():
     return (target - now).total_seconds()
 
 
-def _daily_refresh_loop():
+async def _daily_refresh_loop():
     """Background loop: sleep until 10 AM IST, then run collectors."""
-    import time as _time
     _scheduler_state["active"] = True
     print(f"[scheduler] Daily refresh scheduler started. Next run in {_seconds_until_next_10am():.0f}s")
 
     while True:
         wait = _seconds_until_next_10am()
         print(f"[scheduler] Sleeping {wait:.0f}s until 10:00 AM IST")
-        _time.sleep(wait)
+        await asyncio.sleep(wait)
 
         print(f"[scheduler] 🔄 10 AM IST — starting daily refresh")
         _scheduler_state["last_run"] = _now_ist().isoformat()
 
-        # Run YouTube stats refresh
-        start_collector_process("enrich_all.py", "scheduled_yt_stats")
+        # Run YouTube stats refresh using new Go binary
+        start_collector_process("../collector_go/youtube_enricher", "scheduled_yt_stats")
 
         # Wait for it to finish (poll every 10s, max 10 min)
         for _ in range(60):
             if not _collector_state["running"]:
                 break
-            _time.sleep(10)
+            await asyncio.sleep(10)
 
 
         print(f"[scheduler] ✅ Daily refresh complete")
         # Sleep a bit to avoid re-triggering
-        _time.sleep(120)
+        await asyncio.sleep(120)
 
 
 @app.on_event("startup")
-def startup():
+async def startup():
     init_db()
     # Start the daily scheduler in background
-    sched_thread = threading.Thread(target=_daily_refresh_loop, daemon=True)
-    sched_thread.start()
+    asyncio.create_task(_daily_refresh_loop())
 
 
 @app.get("/api/scheduler/status")
@@ -697,27 +681,9 @@ def get_youtube_viral(limit: int = Query(20, ge=1, le=100)):
         ORDER BY va.growth_factor DESC, va.detected_at DESC
         LIMIT ?
     """, (limit,)).fetchall()
-    result = enrich_viral_alerts_bulk(conn, [dict(r) for r in rows], "youtube")
+    result = [enrich_viral_alert(conn, dict(r)) for r in rows]
     conn.close()
     return {"viral": result}
-
-
-@app.get("/api/dashboard")
-def get_dashboard():
-    """Combined endpoint: returns stats, viral, releases, filters, and quota in one request."""
-    return {
-        "stats": _get_stats_cached(),
-        "viral": get_youtube_viral(limit=12),
-        "releases": get_watchlist_releases(days=7),
-        "filters": _get_filters_cached(),
-        "quota": _get_quota_safe(),
-    }
-
-def _get_quota_safe():
-    try:
-        return get_quota()
-    except Exception:
-        return None
 
 
 @app.get("/api/spotify/viral")
@@ -750,7 +716,7 @@ def get_spotify_viral(limit: int = Query(20, ge=1, le=100)):
         ORDER BY popularity_delta DESC, va.detected_at DESC
         LIMIT ?
     """, (limit,)).fetchall()
-    result = enrich_viral_alerts_bulk(conn, [dict(r) for r in rows], "spotify")
+    result = [enrich_viral_alert(conn, dict(r)) for r in rows]
     conn.close()
     return {"viral": result}
 
@@ -763,27 +729,31 @@ def get_watchlist_releases(days: int = Query(7, ge=1, le=30)):
     conn = get_connection()
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     
-    # Fetch all releases in one query, then split by watched status
-    all_rows = conn.execute("""
-        WITH latest_snaps AS (
-            SELECT song_id, play_count
-            FROM play_snapshots
-            WHERE id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-        )
+    # Watched Artists
+    watched_rows = conn.execute("""
         SELECT
             s.id as song_id, s.title, s.platform, s.platform_id, s.album_name,
             s.release_date, s.thumbnail_url, a.name as artist_name, a.id as artist_id,
-            a.image_url as artist_image, a.is_watched,
-            COALESCE(ls.play_count, 0) as latest_play_count
+            a.image_url as artist_image,
+            (SELECT play_count FROM play_snapshots WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_play_count
         FROM songs s
         JOIN artists a ON s.artist_id = a.id
-        LEFT JOIN latest_snaps ls ON s.id = ls.song_id
-        WHERE s.release_date >= ?
+        WHERE a.is_watched = 1 AND s.release_date >= ?
         ORDER BY s.release_date DESC
     """, (cutoff,)).fetchall()
 
-    watched_rows = [r for r in all_rows if r["is_watched"] == 1]
-    other_rows = [r for r in all_rows if r["is_watched"] != 1]
+    # Other Artists
+    other_rows = conn.execute("""
+        SELECT
+            s.id as song_id, s.title, s.platform, s.platform_id, s.album_name,
+            s.release_date, s.thumbnail_url, a.name as artist_name, a.id as artist_id,
+            a.image_url as artist_image,
+            (SELECT play_count FROM play_snapshots WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_play_count
+        FROM songs s
+        JOIN artists a ON s.artist_id = a.id
+        WHERE a.is_watched = 0 AND s.release_date >= ?
+        ORDER BY s.release_date DESC
+    """, (cutoff,)).fetchall()
 
     conn.close()
     return {
@@ -799,27 +769,31 @@ def get_spotify_releases(days: int = Query(7, ge=1, le=30)):
     conn = get_connection()
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     
-    all_rows = conn.execute("""
-        WITH latest_snaps AS (
-            SELECT song_id, play_count
-            FROM play_snapshots
-            WHERE platform = 'spotify'
-              AND id IN (SELECT MAX(id) FROM play_snapshots WHERE platform = 'spotify' GROUP BY song_id)
-        )
+    # Watched Artists
+    watched_rows = conn.execute("""
         SELECT
             s.id as song_id, s.title, s.platform, s.platform_id, s.album_name,
             s.release_date, s.thumbnail_url, a.name as artist_name, a.id as artist_id,
-            a.image_url as artist_image, a.is_watched,
-            COALESCE(ls.play_count, 0) as latest_play_count
+            a.image_url as artist_image,
+            (SELECT play_count FROM play_snapshots WHERE song_id = s.id AND platform = 'spotify' ORDER BY collected_at DESC LIMIT 1) as latest_play_count
         FROM songs s
         JOIN artists a ON s.artist_id = a.id
-        LEFT JOIN latest_snaps ls ON s.id = ls.song_id
-        WHERE s.platform = 'spotify' AND s.release_date >= ?
+        WHERE a.is_watched = 1 AND s.platform = 'spotify' AND s.release_date >= ?
         ORDER BY s.release_date DESC
     """, (cutoff,)).fetchall()
 
-    watched_rows = [r for r in all_rows if r["is_watched"] == 1]
-    other_rows = [r for r in all_rows if r["is_watched"] != 1]
+    # Other Artists
+    other_rows = conn.execute("""
+        SELECT
+            s.id as song_id, s.title, s.platform, s.platform_id, s.album_name,
+            s.release_date, s.thumbnail_url, a.name as artist_name, a.id as artist_id,
+            a.image_url as artist_image,
+            (SELECT play_count FROM play_snapshots WHERE song_id = s.id AND platform = 'spotify' ORDER BY collected_at DESC LIMIT 1) as latest_play_count
+        FROM songs s
+        JOIN artists a ON s.artist_id = a.id
+        WHERE a.is_watched = 0 AND s.platform = 'spotify' AND s.release_date >= ?
+        ORDER BY s.release_date DESC
+    """, (cutoff,)).fetchall()
 
     conn.close()
     return {
@@ -896,45 +870,60 @@ def get_artists(
 
     # Get artists with computed columns
     rows = conn.execute(f"""
-        WITH latest_snapshots AS (
-            SELECT song_id, MAX(id) as max_id
-            FROM play_snapshots
-            GROUP BY song_id
-        ),
-        song_stats AS (
-            SELECT 
-                s.artist_id,
-                COUNT(CASE WHEN s.platform = 'youtube' THEN 1 END) as yt_song_count,
-                COUNT(CASE WHEN s.platform = 'spotify' THEN 1 END) as spotify_song_count,
-                SUM(CASE WHEN s.platform = 'youtube' THEN ps.play_count ELSE 0 END) as total_yt_views,
-                SUM(CASE WHEN s.platform = 'youtube' THEN ps.like_count ELSE 0 END) as total_yt_likes,
-                SUM(CASE WHEN s.platform = 'youtube' THEN ps.comment_count ELSE 0 END) as total_yt_comments,
-                MAX(CASE WHEN s.platform = 'youtube' THEN s.release_date END) as latest_release
-            FROM songs s
-            LEFT JOIN latest_snapshots ls ON s.id = ls.song_id
-            LEFT JOIN play_snapshots ps ON ls.max_id = ps.id
-            GROUP BY s.artist_id
-        )
-        SELECT 
+        SELECT
             a.*,
-            COALESCE(ss.yt_song_count, 0) as yt_song_count,
-            COALESCE(ss.spotify_song_count, 0) as spotify_song_count,
-            COALESCE(ss.total_yt_views, 0) as total_yt_views,
-            COALESCE(ss.total_yt_likes, 0) as total_yt_likes,
-            COALESCE(ss.total_yt_comments, 0) as total_yt_comments,
-            CASE 
-                WHEN COALESCE(ss.total_yt_views, 0) > 0 
-                THEN ROUND(CAST((COALESCE(ss.total_yt_likes, 0) + COALESCE(ss.total_yt_comments, 0)) AS REAL) * 100.0 / ss.total_yt_views, 2)
-                ELSE NULL 
-            END as engagement_rate,
-            CASE 
-                WHEN COALESCE(ss.total_yt_likes, 0) > 0 
-                THEN CAST(ss.total_yt_views AS REAL) / ss.total_yt_likes
-                ELSE NULL 
-            END as views_per_like,
-            ss.latest_release
+            (SELECT COUNT(*) FROM songs WHERE artist_id = a.id AND platform = 'youtube') as yt_song_count,
+            (SELECT COUNT(*) FROM songs WHERE artist_id = a.id AND platform = 'spotify') as spotify_song_count,
+            (SELECT SUM(ps.play_count) FROM play_snapshots ps
+             JOIN songs s ON ps.song_id = s.id
+             WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+             AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+            ) as total_yt_views,
+            (SELECT SUM(ps.like_count) FROM play_snapshots ps
+             JOIN songs s ON ps.song_id = s.id
+             WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+             AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+            ) as total_yt_likes,
+            (SELECT SUM(ps.comment_count) FROM play_snapshots ps
+             JOIN songs s ON ps.song_id = s.id
+             WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+             AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+            ) as total_yt_comments,
+            CASE WHEN (SELECT SUM(ps.play_count) FROM play_snapshots ps
+                 JOIN songs s ON ps.song_id = s.id
+                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+                ) > 0
+            THEN ROUND(CAST(
+                (SELECT SUM(ps.like_count) + SUM(ps.comment_count) FROM play_snapshots ps
+                 JOIN songs s ON ps.song_id = s.id
+                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+                ) AS REAL) * 100.0 / (SELECT SUM(ps.play_count) FROM play_snapshots ps
+                 JOIN songs s ON ps.song_id = s.id
+                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+                ), 2)
+            ELSE NULL END as engagement_rate,
+            CASE WHEN (SELECT SUM(ps.like_count) FROM play_snapshots ps
+                 JOIN songs s ON ps.song_id = s.id
+                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+                ) > 0
+            THEN CAST((SELECT SUM(ps.play_count) FROM play_snapshots ps
+                 JOIN songs s ON ps.song_id = s.id
+                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+                ) AS REAL) / (SELECT SUM(ps.like_count) FROM play_snapshots ps
+                 JOIN songs s ON ps.song_id = s.id
+                 WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+                 AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+                )
+            ELSE NULL END as views_per_like,
+            (SELECT MAX(s.release_date) FROM songs s
+             WHERE s.artist_id = a.id AND s.platform = 'youtube'
+            ) as latest_release
         FROM artists a
-        LEFT JOIN song_stats ss ON a.id = ss.artist_id
         {where_sql}
         ORDER BY {order_col} {order_dir} {nulls_last}
         LIMIT ? OFFSET ?
@@ -1006,33 +995,27 @@ def get_spotify_artists(
     nulls_last = "NULLS LAST" if sort_by in ("songs", "popularity", "recency") else ""
 
     rows = conn.execute(f"""
-        WITH latest_snapshots AS (
-            SELECT song_id, MAX(id) as max_id
-            FROM play_snapshots
-            WHERE platform = 'spotify'
-            GROUP BY song_id
-        ),
-        song_stats AS (
-            SELECT 
-                s.artist_id,
-                COUNT(*) as spotify_song_count,
-                COALESCE(SUM(ps.play_count), 0) as total_sp_popularity,
-                COALESCE(AVG(ps.play_count), 0) as avg_sp_popularity,
-                MAX(s.release_date) as latest_release
-            FROM songs s
-            LEFT JOIN latest_snapshots ls ON s.id = ls.song_id
-            LEFT JOIN play_snapshots ps ON ls.max_id = ps.id
-            WHERE s.platform = 'spotify'
-            GROUP BY s.artist_id
-        )
-        SELECT 
+        SELECT
             a.*,
-            COALESCE(ss.spotify_song_count, 0) as spotify_song_count,
-            COALESCE(ss.total_sp_popularity, 0) as total_sp_popularity,
-            COALESCE(ss.avg_sp_popularity, 0) as avg_sp_popularity,
-            ss.latest_release
+            (SELECT COUNT(*) FROM songs WHERE artist_id = a.id AND platform = 'spotify') as spotify_song_count,
+            (SELECT SUM(ps.play_count) FROM play_snapshots ps
+             JOIN songs s ON ps.song_id = s.id
+             WHERE s.artist_id = a.id
+               AND s.platform = 'spotify'
+               AND ps.platform = 'spotify'
+               AND ps.id IN (SELECT MAX(id) FROM play_snapshots WHERE platform = 'spotify' GROUP BY song_id)
+            ) as total_sp_popularity,
+            (SELECT AVG(ps.play_count) FROM play_snapshots ps
+             JOIN songs s ON ps.song_id = s.id
+             WHERE s.artist_id = a.id
+               AND s.platform = 'spotify'
+               AND ps.platform = 'spotify'
+               AND ps.id IN (SELECT MAX(id) FROM play_snapshots WHERE platform = 'spotify' GROUP BY song_id)
+            ) as avg_sp_popularity,
+            (SELECT MAX(s.release_date) FROM songs s
+             WHERE s.artist_id = a.id AND s.platform = 'spotify'
+            ) as latest_release
         FROM artists a
-        LEFT JOIN song_stats ss ON a.id = ss.artist_id
         {where_sql}
         ORDER BY {order_col} {order_dir} {nulls_last}
         LIMIT ? OFFSET ?
@@ -1051,10 +1034,6 @@ def get_spotify_artists(
 @app.get("/api/filters")
 def get_filter_options():
     """Get available genre and region options for filter dropdowns."""
-    return _get_filters_cached()
-
-@ttl_cache(ttl_seconds=300)
-def _get_filters_cached():
     conn = get_connection()
     genres = [r[0] for r in conn.execute(
         "SELECT DISTINCT genre FROM artists WHERE genre IS NOT NULL ORDER BY genre"
@@ -1078,41 +1057,32 @@ def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
         conn.close()
         raise HTTPException(status_code=404, detail="Artist not found")
 
-    # Get songs for this platform — CTEs scoped to this artist's songs only
+    # Get songs for this platform
     songs = conn.execute("""
-        WITH artist_song_ids AS (
-            SELECT id FROM songs WHERE artist_id = ? AND platform = ?
-        ),
-        latest_snaps AS (
-            SELECT ps.song_id, MAX(ps.id) as max_id
-            FROM play_snapshots ps
-            WHERE ps.song_id IN (SELECT id FROM artist_song_ids)
-            GROUP BY ps.song_id
-        ),
-        first_snaps AS (
-            SELECT ps.song_id, MIN(ps.id) as min_id
-            FROM play_snapshots ps
-            WHERE ps.song_id IN (SELECT id FROM artist_song_ids)
-            GROUP BY ps.song_id
-        )
         SELECT
             s.*,
-            ls_data.play_count as latest_play_count,
-            fs_data.play_count as first_play_count,
-            ls_data.like_count as latest_like_count,
-            ls_data.comment_count as latest_comment_count,
-            ls_data.ytmusic_play_count as ytmusic_play_count,
-            CASE WHEN COALESCE(ls_data.play_count, 0) > 0
-            THEN ROUND(CAST((COALESCE(ls_data.like_count, 0) + COALESCE(ls_data.comment_count, 0)) AS REAL) * 100.0 / ls_data.play_count, 2)
+            (SELECT play_count FROM play_snapshots
+             WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_play_count,
+            (SELECT play_count FROM play_snapshots
+             WHERE song_id = s.id ORDER BY collected_at ASC LIMIT 1) as first_play_count,
+            (SELECT like_count FROM play_snapshots
+             WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_like_count,
+            (SELECT comment_count FROM play_snapshots
+             WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_comment_count,
+            (SELECT ytmusic_play_count FROM play_snapshots
+             WHERE song_id = s.id AND ytmusic_play_count IS NOT NULL ORDER BY collected_at DESC LIMIT 1) as ytmusic_play_count,
+            CASE WHEN (SELECT play_count FROM play_snapshots
+                       WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) > 0
+            THEN ROUND(CAST(
+                (SELECT like_count + comment_count FROM play_snapshots
+                 WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1)
+                AS REAL) * 100.0 / (SELECT play_count FROM play_snapshots
+                 WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1), 2)
             ELSE 0 END as engagement_rate
         FROM songs s
-        LEFT JOIN latest_snaps ls ON s.id = ls.song_id
-        LEFT JOIN play_snapshots ls_data ON ls.max_id = ls_data.id
-        LEFT JOIN first_snaps fs ON s.id = fs.song_id
-        LEFT JOIN play_snapshots fs_data ON fs.min_id = fs_data.id
         WHERE s.artist_id = ? AND s.platform = ?
         ORDER BY latest_play_count DESC NULLS LAST
-    """, (artist_id, platform, artist_id, platform)).fetchall()
+    """, (artist_id, platform)).fetchall()
 
     # Get viral alerts for this artist
     alerts = conn.execute("""
@@ -1128,8 +1098,7 @@ def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
     artist_metrics = compute_artist_metrics(conn, artist_id, platform)
 
     # Enrich each song with track-level metrics
-    from metrics import enrich_songs_bulk
-    enriched_songs = enrich_songs_bulk(conn, [dict(s) for s in songs], artist_id, platform)
+    enriched_songs = [enrich_song_with_metrics(conn, dict(s), platform) for s in songs]
 
     conn.close()
     return {
@@ -1154,34 +1123,19 @@ def get_spotify_artist_detail(artist_id: str):
         raise HTTPException(status_code=404, detail="Spotify artist not found")
 
     songs = conn.execute("""
-        WITH artist_song_ids AS (
-            SELECT id FROM songs WHERE artist_id = ? AND platform = 'spotify'
-        ),
-        latest_snaps AS (
-            SELECT ps.song_id, MAX(ps.id) as max_id
-            FROM play_snapshots ps
-            WHERE ps.song_id IN (SELECT id FROM artist_song_ids) AND ps.platform = 'spotify'
-            GROUP BY ps.song_id
-        ),
-        first_snaps AS (
-            SELECT ps.song_id, MIN(ps.id) as min_id
-            FROM play_snapshots ps
-            WHERE ps.song_id IN (SELECT id FROM artist_song_ids) AND ps.platform = 'spotify'
-            GROUP BY ps.song_id
-        )
         SELECT
             s.*,
-            ls_data.play_count as latest_play_count,
-            fs_data.play_count as first_play_count,
+            (SELECT play_count FROM play_snapshots
+             WHERE song_id = s.id AND platform = 'spotify'
+             ORDER BY collected_at DESC LIMIT 1) as latest_play_count,
+            (SELECT play_count FROM play_snapshots
+             WHERE song_id = s.id AND platform = 'spotify'
+             ORDER BY collected_at ASC LIMIT 1) as first_play_count,
             0 as latest_like_count
         FROM songs s
-        LEFT JOIN latest_snaps ls ON s.id = ls.song_id
-        LEFT JOIN play_snapshots ls_data ON ls.max_id = ls_data.id
-        LEFT JOIN first_snaps fs ON s.id = fs.song_id
-        LEFT JOIN play_snapshots fs_data ON fs.min_id = fs_data.id
         WHERE s.artist_id = ? AND s.platform = 'spotify'
         ORDER BY latest_play_count DESC NULLS LAST
-    """, (artist_id, artist_id)).fetchall()
+    """, (artist_id,)).fetchall()
 
     alerts = conn.execute("""
         SELECT
@@ -1231,11 +1185,10 @@ def toggle_watchlist(artist_id: str):
         conn.close()
         raise HTTPException(status_code=404, detail="Artist not found")
 
-    new_status = 0 if int(artist["is_watched"] or 0) else 1
+    new_status = 0 if artist["is_watched"] else 1
     conn.execute("UPDATE artists SET is_watched = ? WHERE id = ?", (new_status, artist_id))
     conn.commit()
     conn.close()
-    invalidate_cache()
     return {"artist_id": artist_id, "is_watched": bool(new_status)}
 
 
@@ -1271,7 +1224,6 @@ def delete_artist(artist_id: str):
     conn.execute("DELETE FROM artists WHERE id = ?", (artist_id,))
     conn.commit()
     conn.close()
-    invalidate_cache()
 
     return {
         "status": "deleted",
@@ -1285,29 +1237,17 @@ def delete_artist(artist_id: str):
 @app.get("/api/stats")
 def get_stats():
     """Get overall dashboard statistics."""
-    return _get_stats_cached()
-
-@ttl_cache(ttl_seconds=60)
-def _get_stats_cached():
     conn = get_connection()
-    counts = conn.execute("""
-        SELECT
-            (SELECT COUNT(*) FROM artists) as total_artists,
-            (SELECT COUNT(*) FROM songs) as total_songs,
-            (SELECT COUNT(*) FROM songs WHERE platform = 'youtube') as yt_songs,
-            (SELECT COUNT(*) FROM songs WHERE platform = 'spotify') as spotify_songs,
-            (SELECT COUNT(*) FROM viral_alerts WHERE status = 'new') as viral_alerts,
-            (SELECT COUNT(*) FROM artists WHERE is_watched = 1) as watched_artists
-    """).fetchone()
-    last = conn.execute("SELECT MAX(collected_at) as last_run FROM play_snapshots").fetchone()
     stats = {
-        "total_artists": counts["total_artists"],
-        "total_songs": counts["total_songs"],
-        "yt_songs": counts["yt_songs"],
-        "spotify_songs": counts["spotify_songs"],
-        "viral_alerts": counts["viral_alerts"],
-        "watched_artists": counts["watched_artists"],
-        "last_collection": row_to_dict(last),
+        "total_artists": conn.execute("SELECT COUNT(*) FROM artists").fetchone()[0],
+        "total_songs": conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0],
+        "yt_songs": conn.execute("SELECT COUNT(*) FROM songs WHERE platform = 'youtube'").fetchone()[0],
+        "spotify_songs": conn.execute("SELECT COUNT(*) FROM songs WHERE platform = 'spotify'").fetchone()[0],
+        "viral_alerts": conn.execute("SELECT COUNT(*) FROM viral_alerts WHERE status = 'new'").fetchone()[0],
+        "watched_artists": conn.execute("SELECT COUNT(*) FROM artists WHERE is_watched = 1").fetchone()[0],
+        "last_collection": row_to_dict(conn.execute(
+            "SELECT MAX(collected_at) as last_run FROM play_snapshots"
+        ).fetchone()),
     }
     conn.close()
     return stats
@@ -1410,23 +1350,14 @@ def global_search(q: str = Query(..., min_length=1)):
     term = f"%{q}%"
 
     artists = conn.execute("""
-        WITH artist_stats AS (
-            SELECT
-                s.artist_id,
-                COUNT(CASE WHEN s.platform = 'youtube' THEN 1 END) as yt_song_count,
-                SUM(CASE WHEN s.platform = 'youtube' THEN ps.play_count ELSE 0 END) as total_yt_views
-            FROM songs s
-            LEFT JOIN (
-                SELECT song_id, play_count FROM play_snapshots
-                WHERE id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-            ) ps ON s.id = ps.song_id
-            GROUP BY s.artist_id
-        )
         SELECT a.id, a.name, a.genre, a.region, a.is_watched,
-            COALESCE(ast.yt_song_count, 0) as yt_song_count,
-            COALESCE(ast.total_yt_views, 0) as total_yt_views
+            (SELECT COUNT(*) FROM songs WHERE artist_id = a.id AND platform = 'youtube') as yt_song_count,
+            (SELECT SUM(ps.play_count) FROM play_snapshots ps
+             JOIN songs s ON ps.song_id = s.id
+             WHERE s.artist_id = a.id AND ps.platform = 'youtube'
+             AND ps.id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
+            ) as total_yt_views
         FROM artists a
-        LEFT JOIN artist_stats ast ON a.id = ast.artist_id
         WHERE a.name LIKE ?
         ORDER BY total_yt_views DESC NULLS LAST
         LIMIT 10
@@ -1435,13 +1366,9 @@ def global_search(q: str = Query(..., min_length=1)):
     songs = conn.execute("""
         SELECT s.id, s.title, s.album_name, s.release_date, s.platform_id, s.thumbnail_url,
             a.name as artist_name, a.id as artist_id,
-            ps.play_count as latest_play_count
+            (SELECT play_count FROM play_snapshots WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_play_count
         FROM songs s
         JOIN artists a ON s.artist_id = a.id
-        LEFT JOIN (
-            SELECT song_id, play_count FROM play_snapshots
-            WHERE id IN (SELECT MAX(id) FROM play_snapshots GROUP BY song_id)
-        ) ps ON s.id = ps.song_id
         WHERE s.title LIKE ?
         ORDER BY latest_play_count DESC NULLS LAST
         LIMIT 15
@@ -1458,25 +1385,16 @@ def spotify_global_search(q: str = Query(..., min_length=1)):
     term = f"%{q}%"
 
     artists = conn.execute("""
-        WITH artist_stats AS (
-            SELECT
-                s.artist_id,
-                COUNT(*) as spotify_song_count,
-                SUM(ps.play_count) as total_sp_popularity
-            FROM songs s
-            LEFT JOIN (
-                SELECT song_id, play_count FROM play_snapshots
-                WHERE platform = 'spotify'
-                  AND id IN (SELECT MAX(id) FROM play_snapshots WHERE platform = 'spotify' GROUP BY song_id)
-            ) ps ON s.id = ps.song_id
-            WHERE s.platform = 'spotify'
-            GROUP BY s.artist_id
-        )
         SELECT a.id, a.name, a.genre, a.region, a.is_watched,
-            COALESCE(ast.spotify_song_count, 0) as spotify_song_count,
-            COALESCE(ast.total_sp_popularity, 0) as total_sp_popularity
+            (SELECT COUNT(*) FROM songs WHERE artist_id = a.id AND platform = 'spotify') as spotify_song_count,
+            (SELECT SUM(ps.play_count) FROM play_snapshots ps
+             JOIN songs s ON ps.song_id = s.id
+             WHERE s.artist_id = a.id
+               AND s.platform = 'spotify'
+               AND ps.platform = 'spotify'
+               AND ps.id IN (SELECT MAX(id) FROM play_snapshots WHERE platform = 'spotify' GROUP BY song_id)
+            ) as total_sp_popularity
         FROM artists a
-        LEFT JOIN artist_stats ast ON a.id = ast.artist_id
         WHERE a.spotify_id IS NOT NULL
           AND a.name LIKE ?
         ORDER BY total_sp_popularity DESC NULLS LAST
@@ -1486,14 +1404,12 @@ def spotify_global_search(q: str = Query(..., min_length=1)):
     songs = conn.execute("""
         SELECT s.id, s.title, s.album_name, s.release_date, s.platform_id, s.thumbnail_url,
             a.name as artist_name, a.id as artist_id,
-            ps.play_count as latest_play_count
+            (SELECT play_count
+             FROM play_snapshots
+             WHERE song_id = s.id AND platform = 'spotify'
+             ORDER BY collected_at DESC LIMIT 1) as latest_play_count
         FROM songs s
         JOIN artists a ON s.artist_id = a.id
-        LEFT JOIN (
-            SELECT song_id, play_count FROM play_snapshots
-            WHERE platform = 'spotify'
-              AND id IN (SELECT MAX(id) FROM play_snapshots WHERE platform = 'spotify' GROUP BY song_id)
-        ) ps ON s.id = ps.song_id
         WHERE s.platform = 'spotify'
           AND s.title LIKE ?
         ORDER BY latest_play_count DESC NULLS LAST

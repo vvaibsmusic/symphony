@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 /* ═══════════════════════════════════════════════════════════
    Music Intelligence Dashboard — Design System
    Dark theme with YouTube red + Spotify green accents
    ═══════════════════════════════════════════════════════════ */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 
@@ -1076,28 +1076,4 @@ a {
   .stats-grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* NEW TEMPLATE GLOBALS */
-body {
-  margin: 0;
-  background: #08080E;
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-
-input { font-family: inherit; }
-
-@keyframes tick {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-@keyframes pulseDot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .35; }
 }

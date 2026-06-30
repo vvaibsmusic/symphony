@@ -45,8 +45,7 @@ frontend/.swc/
 *.swp
 *.swo
 *~
+youtube_enricher
 frontend/public/logo.png
 frontend/src/app/favicon.ico
-db/.fuse_hidden*
-*.pyc
-test_*.py
+collector_go/youtube_enricher
