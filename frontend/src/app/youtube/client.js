@@ -104,7 +104,7 @@ export default function YouTubeDashboard() {
         try {
             const res = await fetch(`${API}/api/dashboard`).then(r => r.json());
             setStats(res.stats || null);
-            setViral(res.viral || []);
+            setViral(res.viral?.viral || []);
             setReleases(res.releases || []);
             setQuota(res.quota || null);
         } catch (e) {

@@ -16,7 +16,7 @@ export default function NavBar() {
             try {
                 const res = await fetch(`${API}/api/dashboard`).then(r => r.json());
                 if (res.viral) {
-                    const formattedTicker = res.viral.map(v => ({
+                    const formattedTicker = (res.viral?.viral || []).map(v => ({
                         mult: v.growth_factor ? `${v.growth_factor}x` : '2.1x', // fallback if none
                         title: (v.title || "").split(' (')[0] // Clean title
                     }));
