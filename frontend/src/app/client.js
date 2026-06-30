@@ -12,8 +12,15 @@ function formatNumber(num) {
   return num.toLocaleString();
 }
 
-export default function HomeClient({ initialStats }) {
-  const [stats, setStats] = useState(initialStats);
+export default function Home() {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API}/api/stats`)
+      .then((r) => r.json())
+      .then(setStats)
+      .catch(console.error);
+  }, []);
 
   return (
     <div className="page">

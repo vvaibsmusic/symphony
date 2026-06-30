@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatDate, formatDateTime } from "../../../utils/dateFormat";
@@ -14,34 +14,46 @@ function formatNumber(num) {
     return num.toLocaleString();
 }
 
-/* Parse collaborators from song title: "feat.", "ft.", "x ", "&", "with" */
-function parseCollaborators(title) {
-    const patterns = [
-        /[\(\[](feat\.?|ft\.?|featuring)\s+(.+?)[\)\]]/i,
-        /\s+(feat\.?|ft\.?|featuring)\s+(.+?)(\s*[\(\[]|$)/i,
-        /\s+x\s+([A-Z][^\(\)\[\]]+?)(\s*[\(\[]|$)/,
-    ];
-    for (const p of patterns) {
-        const m = title.match(p);
-        if (m) {
-            const collabs = (m[2] || m[1]).split(/[,&]/).map(s => s.trim()).filter(Boolean);
-            return collabs;
-        }
-    }
-    return [];
+function getInitials(name) {
+    return (name?.replace(/[^A-Za-z]/g, '').slice(0, 1) || '?').toUpperCase();
 }
 
-export default function ArtistDetailClient({ initialData }) {
+const GRADS = [
+    'linear-gradient(135deg,#3a2d5f,#1b2a4a)',
+    'linear-gradient(135deg,#7a4a28,#3a2415)',
+    'linear-gradient(135deg,#444b55,#23282f)',
+    'linear-gradient(135deg,#b2374f,#5e1d2a)',
+    'linear-gradient(135deg,#2c5f8e,#16263f)',
+    'linear-gradient(135deg,#8e5b2c,#3f2c16)',
+    'linear-gradient(135deg,#5b3a8e,#2b2b4e)',
+    'linear-gradient(135deg,#2c8e7a,#163f36)',
+    'linear-gradient(135deg,#E50914,#7a0c12)',
+];
+
+function getGrad(str) {
+    if (!str) return GRADS[0];
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    return GRADS[Math.abs(hash) % GRADS.length];
+}
+
+export default function ArtistDetail() {
     const params = useParams();
     const artistId = params.id;
 
-    const [data, setData] = useState(initialData);
-    const [sortBy, setSortBy] = useState("latest_play_count");
-    const [sortDir, setSortDir] = useState("desc");
-    const [loading, setLoading] = useState(false);
-    const [songSearch, setSongSearch] = useState("");
-    const [groupByAlbum, setGroupByAlbum] = useState(false);
-    const [collecting, setCollecting] = useState(false);
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+
+    useEffect(() => {
+        let timer;
+        if (loading) {
+            timer = setTimeout(() => setShowLoadingScreen(true), 500);
+        } else {
+            setShowLoadingScreen(false);
+        }
+        return () => clearTimeout(timer);
+    }, [loading]);
 
     const fetchDetail = () => {
         if (!artistId) return;
@@ -52,305 +64,161 @@ export default function ArtistDetailClient({ initialData }) {
             .catch(e => { console.error(e); setLoading(false); });
     };
 
-    const isFirstMount = useRef(true);
-    useEffect(() => { 
-        if (isFirstMount.current) {
-            isFirstMount.current = false;
-            return;
-        }
-        fetchDetail(); 
-    }, [artistId]);
+    useEffect(() => { fetchDetail(); }, [artistId]);
 
     const toggleWatch = async () => {
         try {
             await fetch(`${API}/api/artist/${artistId}/watch`, { method: "POST" });
-            const d = await fetch(`${API}/api/artist/${artistId}?platform=youtube`).then(r => r.json());
-            setData(d);
+            fetchDetail();
         } catch (e) { console.error(e); }
     };
 
-    const handleCollect = async () => {
-        setCollecting(true);
-        try {
-            await fetch(`${API}/api/artist/${artistId}/collect`, { method: "POST" });
-            // Wait for collection to finish, then refresh
-            setTimeout(() => { fetchDetail(); setCollecting(false); }, 8000);
-        } catch (e) { console.error(e); setCollecting(false); }
-    };
+    if (loading && !data) {
+        return (
+            <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "26px 28px 60px", position: "relative", minHeight: "80vh" }}>
+                {showLoadingScreen && (
+                    <div style={{
+                        position: "absolute", inset: 0, zIndex: 50,
+                        backdropFilter: "blur(8px)", backgroundColor: "rgba(8,8,14,0.4)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        borderRadius: "14px",
+                    }}>
+                        <div style={{
+                            padding: "12px 24px", background: "rgba(20,20,31,0.9)",
+                            border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px",
+                            color: "var(--text-primary)", fontWeight: 600, display: "flex", gap: "10px", alignItems: "center"
+                        }}>
+                            <span style={{
+                                width: "14px", height: "14px", borderRadius: "50%",
+                                border: "2px solid var(--yt-red)", borderTopColor: "transparent",
+                                animation: "spin 1s linear infinite"
+                            }} />
+                            Loading Artist...
+                        </div>
+                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
-    const handleSort = (col) => {
-        if (sortBy === col) { setSortDir(d => d === "desc" ? "asc" : "desc"); }
-        else { setSortBy(col); setSortDir("desc"); }
-    };
-
-    if (loading) return <div className="page"><div className="loading"><div className="spinner"></div>Loading artist...</div></div>;
-    if (!data || !data.artist) return (
-        <div className="page"><div className="empty-state"><div className="emoji">❌</div><p>Artist not found</p><Link href="/youtube" className="btn btn-secondary" style={{ marginTop: "1rem" }}>← Back to Dashboard</Link></div></div>
-    );
+    if (!data || !data.artist) {
+        return (
+            <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "26px 28px 60px", textAlign: "center" }}>
+                <div style={{ padding: "36px", color: "rgba(255,255,255,.4)", fontSize: "14px" }}>
+                    Artist not found.<br/><br/>
+                    <Link href="/youtube" style={{ color: "#FF3B30", textDecoration: "none" }}>← Back to Leaderboard</Link>
+                </div>
+            </div>
+        );
+    }
 
     const { artist, songs, viral_alerts } = data;
 
-    // Filter by song name
-    const filtered = songSearch
-        ? songs.filter(s => s.title.toLowerCase().includes(songSearch.toLowerCase()))
-        : songs;
-
-    // Sort
-    const sorted = [...filtered].sort((a, b) => {
-        let aVal = a[sortBy], bVal = b[sortBy];
-        if (sortBy === "release_date" || sortBy === "title") {
-            aVal = aVal || ""; bVal = bVal || "";
-            return sortDir === "desc" ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
-        }
-        aVal = aVal || 0; bVal = bVal || 0;
-        return sortDir === "desc" ? bVal - aVal : aVal - bVal;
-    });
-
-    // Group by album
-    const albums = {};
-    if (groupByAlbum) {
-        sorted.forEach(s => {
-            const key = s.album_name || "Singles / Unknown";
-            if (!albums[key]) albums[key] = [];
-            albums[key].push(s);
-        });
-    }
-
     const totalViews = songs.reduce((sum, s) => sum + (s.latest_play_count || 0), 0);
     const totalLikes = songs.reduce((sum, s) => sum + (s.latest_like_count || 0), 0);
-
-    const thStyle = {
-        padding: "10px 12px", fontWeight: 600, color: "var(--text-muted)", fontSize: "0.75rem",
-        textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border-subtle)",
-        cursor: "pointer", whiteSpace: "nowrap", userSelect: "none",
-    };
-    const tdStyle = { padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.03)" };
-
-    const SortArrow = ({ col }) => sortBy === col ? <span style={{ fontSize: "0.65rem", marginLeft: 2 }}>{sortDir === "desc" ? "↓" : "↑"}</span> : null;
-
-    const renderSongRow = (song, i) => {
-        const collabs = parseCollaborators(song.title);
-        return (
-            <tr key={song.id}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.025)"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                <td style={{ ...tdStyle, color: "var(--text-muted)", width: 40 }}>{i + 1}</td>
-                <td style={tdStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        {song.thumbnail_url ? (
-                            <img src={song.thumbnail_url} alt="" style={{ width: 40, height: 40, borderRadius: 4, objectFit: "cover", flexShrink: 0 }} />
-                        ) : (
-                            <div style={{ width: 40, height: 40, borderRadius: 4, background: "var(--bg-secondary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem", color: "var(--text-muted)", flexShrink: 0 }}>▶</div>
-                        )}
-                        <span style={{ fontWeight: 500 }}>{song.title}</span>
-                    </div>
-                </td>
-                {!groupByAlbum && (
-                    <td style={{ ...tdStyle, color: "var(--text-secondary)", fontSize: "0.82rem", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {song.album_name || "—"}
-                    </td>
-                )}
-                <td style={{ ...tdStyle, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-                    {collabs.length > 0 ? collabs.join(", ") : <span style={{ color: "var(--text-muted)" }}>—</span>}
-                </td>
-                <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600, color: "var(--yt-red)", fontVariantNumeric: "tabular-nums" }}>
-                    {formatNumber(song.latest_play_count)}
-                </td>
-                <td style={{ ...tdStyle, textAlign: "right", color: "var(--text-muted)", fontSize: "0.75rem", fontVariantNumeric: "tabular-nums" }}>
-                    {song.ytmusic_play_count ? formatNumber(song.ytmusic_play_count) : "—"}
-                </td>
-                <td style={{ ...tdStyle, textAlign: "right", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-                    {formatNumber(song.latest_like_count)}
-                </td>
-                <td style={{ ...tdStyle, textAlign: "right", color: "var(--text-muted)", fontSize: "0.82rem" }}>
-                    {formatDate(song.release_date)}
-                </td>
-                <td style={{ ...tdStyle, width: 60 }}>
-                    {song.platform_id && (
-                        <a href={`https://www.youtube.com/watch?v=${song.platform_id}`} target="_blank" rel="noopener noreferrer"
-                            style={{ padding: "3px 8px", fontSize: "0.72rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)", textDecoration: "none" }}>
-                            ▶
-                        </a>
-                    )}
-                </td>
-            </tr>
-        );
-    };
+    
+    // Process songs for the table (sort by views descending)
+    const sortedSongs = [...songs].sort((a, b) => (b.latest_play_count || 0) - (a.latest_play_count || 0));
 
     return (
-        <div className="page">
-            {/* Breadcrumb */}
-            <div style={{ marginBottom: "1.5rem" }}>
-                <Link href="/youtube" style={{ color: "var(--text-secondary)", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6 }}>
-                    ← Back to <img src="/logo.png" alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: "cover" }} /> <span className="symphony-brand" style={{ fontSize: "0.95rem" }}>symphony</span>
-                </Link>
-            </div>
-
-            {/* Hero */}
-            <div className="artist-hero">
-                <div className="artist-hero-avatar">
-                    {artist.image_url ? <img src={artist.image_url} alt={artist.name} /> : artist.name.charAt(0)}
-                </div>
-                <div className="artist-hero-info">
-                    <h1>{artist.name}</h1>
-                    <span className="genre-tag">{artist.genre || "Music"}</span>
-                    {artist.region && (
-                        <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "12px" }}>📍 {artist.region}</div>
-                    )}
-                    <div className="artist-hero-stats">
-                        <div className="artist-hero-stat"><div className="value">{songs.length}</div><div className="label">Songs</div></div>
-                        <div className="artist-hero-stat"><div className="value" style={{ color: "var(--yt-red)" }}>{formatNumber(totalViews)}</div><div className="label">Total Views</div></div>
-                        {totalLikes > 0 && (
-                            <div className="artist-hero-stat"><div className="value" style={{ color: "#4ade80" }}>{formatNumber(totalLikes)}</div><div className="label">Total Likes</div></div>
-                        )}
-                        <div className="artist-hero-stat"><div className="value" style={{ color: "var(--viral-orange)" }}>{viral_alerts.length}</div><div className="label">Viral Alerts</div></div>
-                    </div>
-                </div>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    {songs.length === 0 && (
-                        <button onClick={handleCollect} disabled={collecting} style={{
-                            padding: "10px 20px", borderRadius: "var(--radius-sm)", border: "1px solid var(--yt-red)",
-                            background: "rgba(255,0,0,0.1)", color: "var(--yt-red)", fontSize: "0.85rem", fontWeight: 600,
-                            fontFamily: "Inter, sans-serif", cursor: collecting ? "not-allowed" : "pointer",
-                            display: "flex", alignItems: "center", gap: 6,
-                        }}>
-                            {collecting ? (<><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }}></span> Collecting...</>) : ("🔄 Fetch Songs")}
-                        </button>
-                    )}
-                    <button className={`btn ${artist.is_watched ? "btn-watch watching" : "btn-watch"}`} onClick={toggleWatch} style={{ fontSize: "1rem", padding: "10px 24px" }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill={artist.is_watched ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="heart-icon">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        {artist.is_watched ? "Watching" : "Watch"}
-                    </button>
-                </div>
-            </div>
-
-            {/* Viral Alerts */}
-            {viral_alerts.length > 0 && (
-                <div className="section">
-                    <div className="section-header"><h2 className="section-title"><span className="icon">🔥</span> Viral Alerts</h2></div>
-                    <div className="viral-grid">
-                        {viral_alerts.map(v => (
-                            <div className="viral-card" key={v.id}>
-                                <div className="viral-info">
-                                    <div className="viral-title">{v.title}</div>
-                                    <div className="viral-stats">
-                                        <span className="viral-badge">🔥 {v.growth_factor}x</span>
-                                        <span className="viral-views">{formatNumber(v.previous_count)} → {formatNumber(v.current_count)}</span>
-                                    </div>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "6px" }}>{formatDateTime(v.detected_at)}</div>
-                                </div>
-                            </div>
-                        ))}
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "22px 28px 60px" }}>
+            
+            {showLoadingScreen && (
+                <div style={{
+                    position: "absolute", inset: 0, zIndex: 50,
+                    backdropFilter: "blur(8px)", backgroundColor: "rgba(8,8,14,0.4)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    borderRadius: "14px",
+                }}>
+                    <div style={{
+                        padding: "12px 24px", background: "rgba(20,20,31,0.9)",
+                        border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px",
+                        color: "var(--text-primary)", fontWeight: 600, display: "flex", gap: "10px", alignItems: "center"
+                    }}>
+                        <span style={{
+                            width: "14px", height: "14px", borderRadius: "50%",
+                            border: "2px solid var(--yt-red)", borderTopColor: "transparent",
+                            animation: "spin 1s linear infinite"
+                        }} />
+                        Refreshing...
                     </div>
                 </div>
             )}
 
-            {/* Songs Section */}
-            <div className="section">
-                <div className="section-header">
-                    <h2 className="section-title"><span className="icon">🎵</span> All Songs ({filtered.length}{songSearch && ` of ${songs.length}`})</h2>
+            <Link href="/youtube" style={{ display: "inline-flex", alignItems: "center", gap: "7px", color: "rgba(255,255,255,.5)", fontSize: "13px", cursor: "pointer", marginBottom: "18px", textDecoration: "none" }}>
+                ← Back to leaderboard
+            </Link>
+
+            {/* profile header */}
+            <div style={{ background: "linear-gradient(135deg,#1b1830,#14141F)", border: "1px solid rgba(255,255,255,.07)", borderRadius: "18px", padding: "26px", display: "flex", gap: "26px", alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ width: "118px", height: "118px", borderRadius: "50%", background: getGrad(artist.id), flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "42px", color: "rgba(255,255,255,.92)", boxShadow: "0 8px 30px -6px rgba(0,0,0,.5)" }}>
+                    {getInitials(artist.name)}
                 </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "38px", fontWeight: 700, letterSpacing: "-1px", lineHeight: 1 }}>{artist.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "10px" }}>
+                        <span style={{ background: "rgba(229,9,20,.16)", color: "#FF6A52", fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "999px" }}>{artist.genre || "Unknown Genre"}</span>
+                        <span style={{ fontSize: "13px", color: "rgba(255,255,255,.55)" }}>📍 {artist.region || "Unknown Region"}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "34px", marginTop: "18px", flexWrap: "wrap" }}>
+                        <div><div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "24px", fontWeight: 600 }}>{songs.length}</div><div style={{ font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.4)", marginTop: "2px" }}>SONGS</div></div>
+                        <div><div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "24px", fontWeight: 600, color: "#FF3B30" }}>{formatNumber(totalViews)}</div><div style={{ font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.4)", marginTop: "2px" }}>TOTAL VIEWS</div></div>
+                        <div><div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "24px", fontWeight: 600, color: "#5BE08A" }}>{formatNumber(totalLikes)}</div><div style={{ font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.4)", marginTop: "2px" }}>TOTAL LIKES</div></div>
+                        <div><div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "24px", fontWeight: 600, color: "#FF8A3D" }}>{viral_alerts.length}</div><div style={{ font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.4)", marginTop: "2px" }}>VIRAL ALERTS</div></div>
+                    </div>
+                </div>
+                <button onClick={toggleWatch} style={{ background: artist.is_watched ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid rgba(255,255,255,.16)", color: "#E9E9F2", padding: "11px 20px", borderRadius: "11px", font: "600 13px 'Space Grotesk'", cursor: "pointer", flex: "none" }}>
+                    {artist.is_watched ? '♥ Watching' : '♡ Watch'}
+                </button>
+            </div>
 
-                {songs.length > 0 && (
-                    /* Song Filter Toolbar */
-                    <div style={{
-                        display: "flex", flexWrap: "wrap", gap: 8, marginBottom: "1rem",
-                        alignItems: "center", padding: "10px 14px",
-                        background: "var(--bg-card)", border: "1px solid var(--border-subtle)",
-                        borderRadius: "var(--radius-lg)",
-                    }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 180 }}>
-                            <span>🔍</span>
-                            <input type="text" placeholder="Filter songs..." value={songSearch}
-                                onChange={e => setSongSearch(e.target.value)}
-                                style={{
-                                    flex: 1, padding: "6px 10px", background: "var(--bg-secondary)",
-                                    border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)",
-                                    color: "var(--text-primary)", fontSize: "0.85rem", fontFamily: "Inter, sans-serif", outline: "none",
-                                }} />
+            {/* viral alerts */}
+            <div style={{ marginTop: "28px", display: "flex", alignItems: "center", gap: "8px" }}><span style={{ fontSize: "16px" }}>🔥</span><span style={{ fontWeight: 600, fontSize: "16px" }}>Viral Alerts</span></div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "12px" }}>
+                {viral_alerts.length > 0 ? viral_alerts.slice(0, 9).map((v, i) => (
+                    <div key={i} style={{ background: "#14141F", border: "1px solid rgba(255,82,56,.18)", borderRadius: "13px", padding: "15px 16px" }}>
+                        <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.title || "Unknown Song"}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "9px", marginTop: "9px" }}>
+                            <span style={{ background: "rgba(255,82,56,.16)", color: "#FF6A52", font: "700 12px ui-monospace,Menlo,monospace", padding: "4px 9px", borderRadius: "7px" }}>▲ {v.growth_factor ? `${v.growth_factor}x` : '—'}</span>
+                            <span style={{ font: "600 11px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.5)" }}>{formatNumber(v.previous_count)} → {formatNumber(v.current_count)}</span>
                         </div>
-
-                        <button onClick={() => setGroupByAlbum(!groupByAlbum)} style={{
-                            padding: "6px 14px", borderRadius: "var(--radius-sm)",
-                            border: groupByAlbum ? "1px solid var(--yt-red)" : "1px solid var(--border-subtle)",
-                            background: groupByAlbum ? "rgba(255,0,0,0.1)" : "var(--bg-secondary)",
-                            color: groupByAlbum ? "var(--yt-red)" : "var(--text-secondary)",
-                            fontSize: "0.82rem", fontWeight: 600, fontFamily: "Inter, sans-serif", cursor: "pointer",
-                        }}>
-                            {groupByAlbum ? "📁 Grouped by Album" : "📁 Group by Album"}
-                        </button>
+                        <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,.35)", marginTop: "9px", fontFamily: "ui-monospace,Menlo,monospace" }}>{formatDateTime(v.detected_at)}</div>
                     </div>
-                )}
-
-                {songs.length > 0 ? (
-                    <div style={{ overflowX: "auto" }}>
-                        {groupByAlbum ? (
-                            /* Album-grouped view */
-                            Object.entries(albums).map(([albumName, albumSongs]) => (
-                                <div key={albumName} style={{ marginBottom: "1.5rem" }}>
-                                    <div style={{
-                                        padding: "8px 14px", background: "rgba(255,255,255,0.03)",
-                                        borderRadius: "var(--radius-sm)", marginBottom: 6,
-                                        display: "flex", alignItems: "center", gap: 8,
-                                    }}>
-                                        <span style={{ fontSize: "0.9rem" }}>💿</span>
-                                        <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)" }}>{albumName}</span>
-                                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>({albumSongs.length} songs)</span>
-                                    </div>
-                                    <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: "0.85rem", fontFamily: "Inter, sans-serif" }}>
-                                        <thead>
-                                            <tr>
-                                                <th style={thStyle}>#</th>
-                                                <th style={{ ...thStyle, textAlign: "left" }} onClick={() => handleSort("title")}>Song<SortArrow col="title" /></th>
-                                                <th style={{ ...thStyle, textAlign: "left" }}>Feat.</th>
-                                                <th style={{ ...thStyle, textAlign: "right" }} onClick={() => handleSort("latest_play_count")}>Views<SortArrow col="latest_play_count" /></th>
-                                                <th style={{ ...thStyle, textAlign: "right", color: "var(--text-muted)", fontSize: "0.65rem" }} onClick={() => handleSort("ytmusic_play_count")}>YTM Views<SortArrow col="ytmusic_play_count" /></th>
-                                                <th style={{ ...thStyle, textAlign: "right" }} onClick={() => handleSort("latest_like_count")}>Likes<SortArrow col="latest_like_count" /></th>
-                                                <th style={{ ...thStyle, textAlign: "right" }} onClick={() => handleSort("release_date")}>Released<SortArrow col="release_date" /></th>
-                                                <th style={thStyle}></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>{albumSongs.map((s, i) => renderSongRow(s, i))}</tbody>
-                                    </table>
-                                </div>
-                            ))
-                        ) : (
-                            /* Flat view */
-                            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: "0.85rem", fontFamily: "Inter, sans-serif" }}>
-                                <thead>
-                                    <tr>
-                                        <th style={thStyle}>#</th>
-                                        <th style={{ ...thStyle, textAlign: "left" }} onClick={() => handleSort("title")}>Song<SortArrow col="title" /></th>
-                                        <th style={{ ...thStyle, textAlign: "left" }}>Album</th>
-                                        <th style={{ ...thStyle, textAlign: "left" }}>Feat.</th>
-                                        <th style={{ ...thStyle, textAlign: "right" }} onClick={() => handleSort("latest_play_count")}>Views<SortArrow col="latest_play_count" /></th>
-                                        <th style={{ ...thStyle, textAlign: "right", color: "var(--text-muted)", fontSize: "0.65rem" }} onClick={() => handleSort("ytmusic_play_count")}>YTM Views<SortArrow col="ytmusic_play_count" /></th>
-                                        <th style={{ ...thStyle, textAlign: "right" }} onClick={() => handleSort("latest_like_count")}>Likes<SortArrow col="latest_like_count" /></th>
-                                        <th style={{ ...thStyle, textAlign: "right" }} onClick={() => handleSort("release_date")}>Released<SortArrow col="release_date" /></th>
-                                        <th style={thStyle}></th>
-                                    </tr>
-                                </thead>
-                                <tbody>{sorted.map((s, i) => renderSongRow(s, i))}</tbody>
-                            </table>
-                        )}
-                    </div>
-                ) : (
-                    <div className="empty-state">
-                        <div className="emoji">🎵</div>
-                        <p>No songs collected yet.</p>
-                        <button onClick={handleCollect} disabled={collecting} style={{
-                            marginTop: 12, padding: "10px 24px", borderRadius: "var(--radius-sm)",
-                            border: "none", background: "var(--yt-red)", color: "white",
-                            fontSize: "0.9rem", fontWeight: 600, fontFamily: "Inter, sans-serif",
-                            cursor: collecting ? "not-allowed" : "pointer",
-                        }}>
-                            {collecting ? "Collecting..." : "🔄 Fetch Songs from YouTube"}
-                        </button>
+                )) : (
+                    <div style={{ gridColumn: "1 / -1", padding: "20px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "13px", color: "rgba(255,255,255,.4)", fontSize: "13px", textAlign: "center" }}>
+                        No viral alerts recorded yet for this artist.
                     </div>
                 )}
             </div>
+
+            {/* all songs */}
+            <div style={{ marginTop: "28px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "16px" }}>🎵</span><span style={{ fontWeight: 600, fontSize: "16px" }}>All Songs</span>
+                <span style={{ font: "600 12px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.35)" }}>({songs.length})</span>
+            </div>
+            <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 150px 96px 86px 88px 36px", gap: "12px", padding: "11px 18px", font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
+                    <div>#</div><div>SONG</div><div>ALBUM</div><div style={{ textAlign: "right" }}>VIEWS</div><div style={{ textAlign: "right" }}>LIKES</div><div>RELEASED</div><div></div>
+                </div>
+                {sortedSongs.length > 0 ? sortedSongs.map((t, i) => (
+                    <div key={t.id} style={{ display: "grid", gridTemplateColumns: "40px 1fr 150px 96px 86px 88px 36px", gap: "12px", alignItems: "center", padding: "11px 18px", borderTop: "1px solid rgba(255,255,255,.05)", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "12px", color: "rgba(255,255,255,.4)" }}>{i + 1}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "11px", minWidth: 0 }}>
+                            <div style={{ width: "38px", height: "26px", borderRadius: "5px", background: getGrad(t.id), flex: "none", backgroundImage: t.thumbnail_url ? `url(${t.thumbnail_url})` : "none", backgroundSize: "cover", backgroundPosition: "center" }}></div>
+                            <div style={{ fontWeight: 500, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={t.title}>{t.title}</div>
+                        </div>
+                        <div style={{ fontSize: "12px", color: "rgba(255,255,255,.5)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={t.album_name || "Single"}>{t.album_name || "Single"}</div>
+                        <div style={{ textAlign: "right", fontFamily: "ui-monospace,Menlo,monospace", fontSize: "13px", fontWeight: 600, color: "#FF6A52" }}>{formatNumber(t.latest_play_count)}</div>
+                        <div style={{ textAlign: "right", fontFamily: "ui-monospace,Menlo,monospace", fontSize: "12px", color: "rgba(255,255,255,.6)" }}>{formatNumber(t.latest_like_count)}</div>
+                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,.45)", fontFamily: "ui-monospace,Menlo,monospace" }}>{t.release_date ? formatDate(t.release_date) : "—"}</div>
+                        <a href={`https://youtube.com/watch?v=${t.platform_id}`} target="_blank" rel="noopener noreferrer" style={{ textAlign: "center", color: "#FF3B30", fontSize: "13px", textDecoration: "none", cursor: "pointer" }}>▶</a>
+                    </div>
+                )) : (
+                    <div style={{ padding: "36px", textAlign: "center", color: "rgba(255,255,255,.4)", fontSize: "13px", gridColumn: "1 / -1" }}>No songs found.</div>
+                )}
+            </div>
+
         </div>
     );
 }
