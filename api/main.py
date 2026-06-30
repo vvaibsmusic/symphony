@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from db import get_connection, init_db
 from metrics import compute_artist_metrics, enrich_song_with_metrics, enrich_viral_alert, enrich_songs_bulk, enrich_viral_alerts_bulk
+from cache import ttl_cache, invalidate_cache
 
 app = FastAPI(title="Music Intelligence Dashboard API", version="1.0.0")
 
@@ -1029,6 +1030,10 @@ def get_spotify_artists(
 @app.get("/api/filters")
 def get_filter_options():
     """Get available genre and region options for filter dropdowns."""
+    return _get_filters_cached()
+
+@ttl_cache(ttl_seconds=300)
+def _get_filters_cached():
     conn = get_connection()
     genres = [r[0] for r in conn.execute(
         "SELECT DISTINCT genre FROM artists WHERE genre IS NOT NULL ORDER BY genre"
@@ -1052,17 +1057,22 @@ def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
         conn.close()
         raise HTTPException(status_code=404, detail="Artist not found")
 
-    # Get songs for this platform
+    # Get songs for this platform — CTEs scoped to this artist's songs only
     songs = conn.execute("""
-        WITH latest_snaps AS (
-            SELECT song_id, MAX(id) as max_id
-            FROM play_snapshots
-            GROUP BY song_id
+        WITH artist_song_ids AS (
+            SELECT id FROM songs WHERE artist_id = ? AND platform = ?
+        ),
+        latest_snaps AS (
+            SELECT ps.song_id, MAX(ps.id) as max_id
+            FROM play_snapshots ps
+            WHERE ps.song_id IN (SELECT id FROM artist_song_ids)
+            GROUP BY ps.song_id
         ),
         first_snaps AS (
-            SELECT song_id, MIN(id) as min_id
-            FROM play_snapshots
-            GROUP BY song_id
+            SELECT ps.song_id, MIN(ps.id) as min_id
+            FROM play_snapshots ps
+            WHERE ps.song_id IN (SELECT id FROM artist_song_ids)
+            GROUP BY ps.song_id
         )
         SELECT
             s.*,
@@ -1081,7 +1091,7 @@ def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
         LEFT JOIN play_snapshots fs_data ON fs.min_id = fs_data.id
         WHERE s.artist_id = ? AND s.platform = ?
         ORDER BY latest_play_count DESC NULLS LAST
-    """, (artist_id, platform)).fetchall()
+    """, (artist_id, platform, artist_id, platform)).fetchall()
 
     # Get viral alerts for this artist
     alerts = conn.execute("""
@@ -1123,17 +1133,20 @@ def get_spotify_artist_detail(artist_id: str):
         raise HTTPException(status_code=404, detail="Spotify artist not found")
 
     songs = conn.execute("""
-        WITH latest_snaps AS (
-            SELECT song_id, MAX(id) as max_id
-            FROM play_snapshots
-            WHERE platform = 'spotify'
-            GROUP BY song_id
+        WITH artist_song_ids AS (
+            SELECT id FROM songs WHERE artist_id = ? AND platform = 'spotify'
+        ),
+        latest_snaps AS (
+            SELECT ps.song_id, MAX(ps.id) as max_id
+            FROM play_snapshots ps
+            WHERE ps.song_id IN (SELECT id FROM artist_song_ids) AND ps.platform = 'spotify'
+            GROUP BY ps.song_id
         ),
         first_snaps AS (
-            SELECT song_id, MIN(id) as min_id
-            FROM play_snapshots
-            WHERE platform = 'spotify'
-            GROUP BY song_id
+            SELECT ps.song_id, MIN(ps.id) as min_id
+            FROM play_snapshots ps
+            WHERE ps.song_id IN (SELECT id FROM artist_song_ids) AND ps.platform = 'spotify'
+            GROUP BY ps.song_id
         )
         SELECT
             s.*,
@@ -1147,7 +1160,7 @@ def get_spotify_artist_detail(artist_id: str):
         LEFT JOIN play_snapshots fs_data ON fs.min_id = fs_data.id
         WHERE s.artist_id = ? AND s.platform = 'spotify'
         ORDER BY latest_play_count DESC NULLS LAST
-    """, (artist_id,)).fetchall()
+    """, (artist_id, artist_id)).fetchall()
 
     alerts = conn.execute("""
         SELECT
@@ -1197,10 +1210,11 @@ def toggle_watchlist(artist_id: str):
         conn.close()
         raise HTTPException(status_code=404, detail="Artist not found")
 
-    new_status = 0 if artist["is_watched"] else 1
+    new_status = 0 if int(artist["is_watched"] or 0) else 1
     conn.execute("UPDATE artists SET is_watched = ? WHERE id = ?", (new_status, artist_id))
     conn.commit()
     conn.close()
+    invalidate_cache()
     return {"artist_id": artist_id, "is_watched": bool(new_status)}
 
 
@@ -1236,6 +1250,7 @@ def delete_artist(artist_id: str):
     conn.execute("DELETE FROM artists WHERE id = ?", (artist_id,))
     conn.commit()
     conn.close()
+    invalidate_cache()
 
     return {
         "status": "deleted",
@@ -1249,6 +1264,10 @@ def delete_artist(artist_id: str):
 @app.get("/api/stats")
 def get_stats():
     """Get overall dashboard statistics."""
+    return _get_stats_cached()
+
+@ttl_cache(ttl_seconds=60)
+def _get_stats_cached():
     conn = get_connection()
     counts = conn.execute("""
         SELECT

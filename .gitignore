@@ -48,3 +48,5 @@ frontend/.swc/
 frontend/public/logo.png
 frontend/src/app/favicon.ico
 db/.fuse_hidden*
+*.pyc
+test_*.py

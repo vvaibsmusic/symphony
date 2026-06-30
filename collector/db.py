@@ -2,6 +2,8 @@
 
 import sqlite3
 import os
+import time
+import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -64,29 +66,50 @@ class LibsqlDictConnection:
     def executescript(self, sql):
         self.conn.executescript(sql)
 
+    def executemany(self, sql, params_list):
+        self.conn.executemany(sql, params_list)
+
     def commit(self):
         self.conn.commit()
 
     def close(self):
-        # Do not close the connection so it can be pooled globally across requests
+        # No-op for pooled Turso connection — connection is reused globally
         pass
 
 _TURSO_GLOBAL_CONN = None
+_TURSO_LAST_OK = 0  # timestamp of last successful use
+_TURSO_LOCK = threading.Lock()
 
 def get_connection():
-    """Get a SQLite connection with WAL mode for better concurrency."""
-    global _TURSO_GLOBAL_CONN
+    """Get a SQLite connection with WAL mode for better concurrency.
+    
+    For Turso: uses a global pooled connection with auto-reconnect.
+    Health-checks the connection if idle for >30 seconds.
+    """
+    global _TURSO_GLOBAL_CONN, _TURSO_LAST_OK
     if _USE_TURSO:
         if libsql is None:
             raise ImportError(
                 "libsql_experimental is required for Turso connections. "
                 "Install it with: pip install libsql-experimental"
             )
-        if _TURSO_GLOBAL_CONN is None:
-            safe_url = _TURSO_URL.replace("libsql://", "https://").replace("wss://", "https://")
-            conn = libsql.connect(safe_url, auth_token=_TURSO_TOKEN)
-            _TURSO_GLOBAL_CONN = LibsqlDictConnection(conn)
-        return _TURSO_GLOBAL_CONN
+        with _TURSO_LOCK:
+            now = time.time()
+            # Health check only if connection has been idle for >30 seconds
+            if _TURSO_GLOBAL_CONN is not None and (now - _TURSO_LAST_OK) > 30:
+                try:
+                    _TURSO_GLOBAL_CONN.execute("SELECT 1").fetchone()
+                except Exception:
+                    print("[db] Turso connection stale, reconnecting...")
+                    _TURSO_GLOBAL_CONN = None
+            # Create new connection if needed
+            if _TURSO_GLOBAL_CONN is None:
+                safe_url = _TURSO_URL.replace("libsql://", "https://").replace("wss://", "https://")
+                conn = libsql.connect(safe_url, auth_token=_TURSO_TOKEN)
+                _TURSO_GLOBAL_CONN = LibsqlDictConnection(conn)
+                print("[db] Turso connection established.")
+            _TURSO_LAST_OK = now
+            return _TURSO_GLOBAL_CONN
     else:
         # Local SQLite fallback for development
         conn = sqlite3.connect(str(DB_PATH))
@@ -124,9 +147,13 @@ def init_db():
     else:
         print(f"Connected to Turso at {_TURSO_URL}")
 
+_INDEXES_CREATED = False
 
 def ensure_indexes():
-    """Create performance indexes if they don't exist."""
+    """Create performance indexes if they don't exist. Runs once per process."""
+    global _INDEXES_CREATED
+    if _INDEXES_CREATED:
+        return
     conn = get_connection()
     indexes = [
         "CREATE INDEX IF NOT EXISTS idx_snapshots_song_platform_date ON play_snapshots(song_id, platform, collected_at DESC)",
@@ -142,9 +169,10 @@ def ensure_indexes():
             conn.commit()
         except Exception as e:
             print(f"[indexes] Skipping: {e}")
+    _INDEXES_CREATED = True
     print("[indexes] Performance indexes ensured.")
 
-# Auto-create indexes on import
+# Auto-create indexes on first import (runs once)
 try:
     ensure_indexes()
 except Exception:
