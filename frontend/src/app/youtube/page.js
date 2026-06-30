@@ -137,18 +137,12 @@ export default function YouTubeDashboard() {
 
     const fetchData = useCallback(async () => {
         try {
-            const [viralRes, releasesRes, statsRes, filtersRes, quotaRes] = await Promise.all([
-                fetch(`${API}/api/youtube/viral?limit=12`).then(r => r.json()),
-                fetch(`${API}/api/watchlist/releases?days=7`).then(r => r.json()),
-                fetch(`${API}/api/stats`).then(r => r.json()),
-                fetch(`${API}/api/filters`).then(r => r.json()),
-                fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null),
-            ]);
-            setViral(viralRes.viral || []);
-            setReleases(releasesRes || { watched: [], other: [] });
-            setStats(statsRes);
-            setFilterOptions(filtersRes);
-            if (quotaRes) setQuota(quotaRes);
+            const dashboard = await fetch(`${API}/api/dashboard`).then(r => r.json());
+            setViral(dashboard.viral?.viral || []);
+            setReleases(dashboard.releases || { watched: [], other: [] });
+            setStats(dashboard.stats);
+            setFilterOptions(dashboard.filters);
+            if (dashboard.quota) setQuota(dashboard.quota);
         } catch (e) { console.error("Failed to fetch data:", e); }
     }, []);
 

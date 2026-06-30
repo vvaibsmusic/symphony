@@ -31,6 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 from fastapi.responses import JSONResponse
 import traceback
 
@@ -697,6 +700,24 @@ def get_youtube_viral(limit: int = Query(20, ge=1, le=100)):
     result = enrich_viral_alerts_bulk(conn, [dict(r) for r in rows], "youtube")
     conn.close()
     return {"viral": result}
+
+
+@app.get("/api/dashboard")
+def get_dashboard():
+    """Combined endpoint: returns stats, viral, releases, filters, and quota in one request."""
+    return {
+        "stats": _get_stats_cached(),
+        "viral": get_youtube_viral(limit=12),
+        "releases": get_watchlist_releases(days=7),
+        "filters": _get_filters_cached(),
+        "quota": _get_quota_safe(),
+    }
+
+def _get_quota_safe():
+    try:
+        return get_quota()
+    except Exception:
+        return None
 
 
 @app.get("/api/spotify/viral")
