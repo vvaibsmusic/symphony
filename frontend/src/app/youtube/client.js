@@ -105,7 +105,7 @@ export default function YouTubeDashboard() {
             const res = await fetch(`${API}/api/dashboard`).then(r => r.json());
             setStats(res.stats || null);
             setViral(res.viral?.viral || []);
-            setReleases(res.releases || []);
+            setReleases([...(res.releases?.watched || []), ...(res.releases?.other || [])]);
             setQuota(res.quota || null);
         } catch (e) {
             console.error("Failed to fetch dashboard stats:", e);
