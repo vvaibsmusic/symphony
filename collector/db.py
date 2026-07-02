@@ -22,6 +22,12 @@ _TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
 _USE_TURSO = bool(_TURSO_URL and _TURSO_TOKEN)
 
 
+class RowDict(dict):
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
 class LibsqlDictCursor:
     def __init__(self, rs):
         self.rs = rs
@@ -31,12 +37,12 @@ class LibsqlDictCursor:
         row = self.rs.fetchone()
         if not row: return None
         cols = [col[0] for col in self.description]
-        return dict(zip(cols, row))
+        return RowDict(zip(cols, row))
 
     def fetchall(self):
         rows = self.rs.fetchall()
         cols = [col[0] for col in self.description]
-        return [dict(zip(cols, row)) for row in rows]
+        return [RowDict(zip(cols, row)) for row in rows]
 
 class LibsqlDictConnection:
     def __init__(self, conn):
