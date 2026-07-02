@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { TableVirtuoso } from "react-virtuoso";
 import { formatDate, formatDateTime } from "../../utils/dateFormat";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "";
 
 function formatNumber(num) {
   if (!num && num !== 0) return "—";

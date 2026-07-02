@@ -35,6 +35,7 @@ RUN CGO_ENABLED=0 go build -o youtube_enricher
 
 # ── Build Next.js frontend ───────────────────────────────────────────────────
 WORKDIR /app/frontend
+ENV NEXT_PUBLIC_API_URL=""
 RUN npm ci && npm run build
 
 # ── Startup script ───────────────────────────────────────────────────────────
@@ -42,14 +43,24 @@ RUN cat > /app/start.sh <<'EOF'
 #!/bin/bash
 set -e
 
-# Start the FastAPI backend in the background on port 8000 and capture logs
+# Start the FastAPI backend in the background on port 8000
 cd /app/api
-uvicorn main:app --host 127.0.0.1 --port 8000 > /app/frontend/public/uvicorn.log 2>&1 &
+uvicorn main:app --host 127.0.0.1 --port 8000 > /tmp/uvicorn.log 2>&1 &
+
+# Wait for backend to be ready before starting frontend
+echo "Waiting for backend..."
+for i in $(seq 1 30); do
+    if curl -s http://127.0.0.1:8000/api/stats > /dev/null 2>&1; then
+        echo "Backend is ready!"
+        break
+    fi
+    sleep 1
+done
 
 # Start the Next.js frontend in the foreground on port 7860
-# Next.js will automatically proxy /api to the FastAPI backend
 cd /app/frontend
 export PORT=7860
+export HOSTNAME=0.0.0.0
 exec npm start
 EOF
 RUN chmod +x /app/start.sh

@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatDate, formatDateTime } from "../../../../utils/dateFormat";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "";
 
 function formatNumber(num) {
   if (!num && num !== 0) return "—";

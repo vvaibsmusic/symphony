@@ -47,5 +47,4 @@ frontend/.swc/
 *~
 youtube_enricher
 frontend/public/logo.png
-frontend/src/app/favicon.ico
 collector_go/youtube_enricher
