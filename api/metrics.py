@@ -224,25 +224,35 @@ def compute_artist_metrics(conn, artist_id, platform="youtube"):
         # Fallback: use legacy (no cycle_id) — get latest snapshot per song
         return _compute_artist_metrics_legacy(conn, artist_id, platform)
 
-    # Aggregate each cycle
+    # Aggregate all cycles in one query instead of one query per cycle
+    placeholders = ",".join("?" * len(cycle_ids))
+    agg_rows = conn.execute(f"""
+        SELECT
+            ps.cycle_id,
+            COALESCE(SUM(ps.play_count), 0) as play_count,
+            COALESCE(SUM(ps.like_count), 0) as like_count,
+            COALESCE(SUM(ps.comment_count), 0) as comment_count
+        FROM play_snapshots ps
+        JOIN songs s ON ps.song_id = s.id
+        WHERE s.artist_id = ? AND ps.platform = ? AND ps.cycle_id IN ({placeholders})
+        GROUP BY ps.cycle_id
+    """, (artist_id, platform, *cycle_ids)).fetchall()
+    agg_by_id = {r["cycle_id"]: r for r in agg_rows}
     cycles = []
     for cid in cycle_ids:
-        row = conn.execute("""
-            SELECT
-                COALESCE(SUM(ps.play_count), 0) as play_count,
-                COALESCE(SUM(ps.like_count), 0) as like_count,
-                COALESCE(SUM(ps.comment_count), 0) as comment_count
-            FROM play_snapshots ps
-            JOIN songs s ON ps.song_id = s.id
-            WHERE s.artist_id = ? AND ps.platform = ? AND ps.cycle_id = ?
-        """, (artist_id, platform, cid)).fetchone()
+        row = agg_by_id.get(cid)
         cycles.append({
-            "play_count": row["play_count"],
-            "like_count": row["like_count"],
-            "comment_count": row["comment_count"],
+            "play_count": row["play_count"] if row else 0,
+            "like_count": row["like_count"] if row else 0,
+            "comment_count": row["comment_count"] if row else 0,
             "cycle_id": cid,
         })
 
+    return _finalize_artist_metrics(cycles)
+
+
+def _finalize_artist_metrics(cycles):
+    """Build the artist metrics payload from per-cycle aggregates (newest first)."""
     current = cycles[0]
     views = current["play_count"] or 0
     likes = current["like_count"] or 0
@@ -342,6 +352,111 @@ def enrich_song_with_metrics(conn, song_dict, platform="youtube"):
         [dict(s) for s in snapshots]
     )
     return song_dict
+
+
+def compute_artist_metrics_from_history(snaps_by_song):
+    """Compute artist metrics from pre-fetched snapshot history (no extra queries).
+
+    snaps_by_song: dict of song_id -> list of snapshot dicts, newest first.
+    Mirrors compute_artist_metrics: cycle-based when cycle_ids exist,
+    otherwise falls back to summing the latest snapshot per song.
+    """
+    agg = {}
+    latest_time = {}
+    has_cycles = False
+    for snaps in snaps_by_song.values():
+        for s in snaps:
+            cid = s.get("cycle_id")
+            if not cid:
+                continue
+            has_cycles = True
+            a = agg.setdefault(cid, {"play_count": 0, "like_count": 0, "comment_count": 0, "cycle_id": cid})
+            a["play_count"] += s.get("play_count") or 0
+            a["like_count"] += s.get("like_count") or 0
+            a["comment_count"] += s.get("comment_count") or 0
+            t = s.get("collected_at") or ""
+            if t > latest_time.get(cid, ""):
+                latest_time[cid] = t
+
+    if has_cycles:
+        cycle_ids = sorted(agg, key=lambda c: latest_time.get(c, ""), reverse=True)[:10]
+        return _finalize_artist_metrics([agg[c] for c in cycle_ids])
+
+    # Legacy fallback: sum the latest snapshot of each song
+    views = likes = comments = 0
+    found = False
+    for snaps in snaps_by_song.values():
+        if not snaps:
+            continue
+        found = True
+        latest = snaps[0]
+        views += latest.get("play_count") or 0
+        likes += latest.get("like_count") or 0
+        comments += latest.get("comment_count") or 0
+
+    if not found:
+        return _empty_metrics()
+
+    return {
+        "engagement": compute_engagement(views, likes, comments),
+        "loyalty": compute_loyalty(likes, comments),
+        "total_views": views,
+        "total_likes": likes,
+        "total_comments": comments,
+        "daily": _empty_delta(),
+        "weekly": _empty_delta(),
+        "momentum": None,
+        "health": None,
+        "cycles_available": 0,
+    }
+
+
+def fetch_snapshots_by_song(conn, song_ids, platform, per_song_limit=30):
+    """Fetch recent snapshots for many songs in ONE query.
+
+    Returns dict of song_id -> snapshot dicts, newest first. Turso executes
+    each statement over the network, so batching here is what keeps
+    endpoints from doing one round trip per song.
+    """
+    result = {sid: [] for sid in song_ids}
+    if not song_ids:
+        return result
+    placeholders = ",".join("?" * len(song_ids))
+    rows = conn.execute(f"""
+        SELECT song_id, play_count, like_count, comment_count,
+               ytmusic_play_count, collected_at, cycle_id
+        FROM (
+            SELECT ps.*, ROW_NUMBER() OVER (
+                PARTITION BY ps.song_id ORDER BY ps.collected_at DESC, ps.id DESC
+            ) AS rn
+            FROM play_snapshots ps
+            WHERE ps.song_id IN ({placeholders}) AND ps.platform = ?
+        )
+        WHERE rn <= ?
+        ORDER BY song_id, collected_at DESC
+    """, (*song_ids, platform, per_song_limit)).fetchall()
+    for r in rows:
+        result.setdefault(r["song_id"], []).append(dict(r))
+    return result
+
+
+def enrich_viral_alerts_batch(conn, alerts, platform):
+    """Add engagement/loyalty deltas + momentum to viral alerts with one query."""
+    if not alerts:
+        return alerts
+    song_ids = sorted({a["song_id"] for a in alerts if a.get("song_id")})
+    by_song = fetch_snapshots_by_song(conn, song_ids, platform, per_song_limit=10)
+    for alert in alerts:
+        cycles = _group_by_cycle(by_song.get(alert.get("song_id"), []))
+        if len(cycles) >= 2:
+            delta = _compute_delta(cycles[0], cycles[1])
+            alert["engagement_delta"] = delta.get("engagement_delta")
+            alert["loyalty_delta"] = delta.get("loyalty_delta")
+        else:
+            alert["engagement_delta"] = None
+            alert["loyalty_delta"] = None
+        alert["momentum"] = _compute_momentum_from_cycles(cycles)
+    return alerts
 
 
 def enrich_viral_alert(conn, alert_dict):

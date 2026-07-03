@@ -3,6 +3,8 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { TableVirtuoso } from "react-virtuoso";
 import { formatDate, formatDateTime } from "../../utils/dateFormat";
+import { swr, fetchJSON, getCached, clearApiCache } from "../../utils/api";
+import { TableSkeleton } from "../../components/Skeletons";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -137,45 +139,45 @@ export default function YouTubeDashboard() {
     };
 
     const fetchData = useCallback(async () => {
-        try {
-            const [viralRes, releasesRes, statsRes, filtersRes, quotaRes] = await Promise.all([
-                fetch(`${API}/api/youtube/viral?limit=12`).then(r => r.json()),
-                fetch(`${API}/api/watchlist/releases?days=7`).then(r => r.json()),
-                fetch(`${API}/api/stats`).then(r => r.json()),
-                fetch(`${API}/api/filters`).then(r => r.json()),
-                fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null),
-            ]);
-            setViral(viralRes.viral || []);
-            setReleases(releasesRes || { watched: [], other: [] });
-            setStats(statsRes);
-            setFilterOptions(filtersRes);
-            if (quotaRes) setQuota(quotaRes);
-        } catch (e) { console.error("Failed to fetch data:", e); }
+        // swr renders cached data instantly and refreshes it in the background
+        await Promise.all([
+            swr(`/api/youtube/viral?limit=12`, d => setViral(d.viral || [])),
+            swr(`/api/watchlist/releases?days=7`, d => setReleases(d || { watched: [], other: [] })),
+            swr(`/api/stats`, d => setStats(d)),
+            swr(`/api/filters`, d => setFilterOptions(d)),
+            swr(`/api/quota`, d => { if (d) setQuota(d); }),
+        ].map(p => p.catch(e => console.error("Failed to fetch data:", e))));
     }, []);
 
     const fetchArtists = useCallback(async () => {
-        if (page === 1) setLoading(true);
+        const params = new URLSearchParams({
+            page, limit: 50, sort_by: sortBy, sort_dir: sortDir,
+        });
+        if (search) params.set("search", search);
+        if (genres.length) params.set("genre", genres.join(","));
+        if (regions.length) params.set("region", regions.join(","));
+        if (watchedOnly) params.set("watched_only", "true");
+        const path = `/api/artists?${params}`;
         try {
-            const params = new URLSearchParams({
-                page, limit: 50, sort_by: sortBy, sort_dir: sortDir,
-            });
-            if (search) params.set("search", search);
-            if (genres.length) params.set("genre", genres.join(","));
-            if (regions.length) params.set("region", regions.join(","));
-            if (watchedOnly) params.set("watched_only", "true");
-            const res = await fetch(`${API}/api/artists?${params}`).then(r => r.json());
             if (page === 1) {
-                setArtists(res.artists || []);
+                // Only show the skeleton when nothing is cached yet
+                if (!getCached(path)) setLoading(true);
+                await swr(path, res => {
+                    setArtists(res.artists || []);
+                    setTotalPages(res.pages || 1);
+                    setTotal(res.total || 0);
+                });
             } else {
+                const res = await fetchJSON(path);
                 setArtists(prev => {
                     // Prevent duplicates in case of double fetches in StrictMode
                     const newIds = new Set((res.artists || []).map(a => a.id));
                     const filteredPrev = prev.filter(a => !newIds.has(a.id));
                     return [...filteredPrev, ...(res.artists || [])];
                 });
+                setTotalPages(res.pages || 1);
+                setTotal(res.total || 0);
             }
-            setTotalPages(res.pages || 1);
-            setTotal(res.total || 0);
         } catch (e) { console.error("Failed to fetch artists:", e); }
         setLoading(false);
     }, [page, search, genres, regions, sortBy, sortDir, watchedOnly]);
@@ -192,6 +194,7 @@ export default function YouTubeDashboard() {
     const toggleWatch = async (artistId) => {
         try {
             await fetch(`${API}/api/artist/${artistId}/watch`, { method: "POST" });
+            clearApiCache();
             fetchArtists(); fetchData();
         } catch (e) { console.error(e); }
     };
@@ -204,6 +207,7 @@ export default function YouTubeDashboard() {
                 const res = await fetch(`${API}/api/refresh/status`).then(r => r.json());
                 if (!res.running) {
                     clearInterval(poll); setRefreshing(false);
+                    clearApiCache();
                     fetchData(); fetchArtists();
                     // Re-fetch quota after stats refresh
                     if (type === "stats") fetch(`${API}/api/quota`).then(r => r.json()).then(q => setQuota(q)).catch(() => { });
@@ -229,7 +233,7 @@ export default function YouTubeDashboard() {
                 const platform = data.platform === "spotify" ? "🎧" : "▶";
                 setAddMsg(`✅ ${platform} Added "${data.artist.name}". Songs loading...`);
                 setAddUrl("");
-                setTimeout(() => { fetchArtists(); fetchData(); }, 3000);
+                setTimeout(() => { clearApiCache(); fetchArtists(); fetchData(); }, 3000);
                 setTimeout(() => { setAddMsg(null); setShowAddForm(false); }, 5000);
             }
         } catch { setAddMsg("❌ Error adding artist"); }
@@ -240,7 +244,7 @@ export default function YouTubeDashboard() {
         if (!confirm(`Delete "${artistName}" and all their songs? This cannot be undone.`)) return;
         try {
             const res = await fetch(`${API}/api/artist/${artistId}`, { method: "DELETE" });
-            if (res.ok) { fetchArtists(); fetchData(); }
+            if (res.ok) { clearApiCache(); fetchArtists(); fetchData(); }
         } catch (e) { console.error(e); }
     };
 
@@ -582,7 +586,7 @@ export default function YouTubeDashboard() {
                 </div>
 
                 {loading && page === 1 ? (
-                    <div className="loading"><div className="spinner"></div>Loading...</div>
+                    <TableSkeleton rows={10} />
                 ) : artists.length === 0 ? (
                     <div className="empty-state"><div className="emoji">🔍</div><p>No artists match your filters.</p></div>
                 ) : (

@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "";
+import { swr } from "../utils/api";
+import { StatsSkeleton } from "../components/Skeletons";
 
 function formatNumber(num) {
   if (!num && num !== 0) return "—";
@@ -16,10 +16,7 @@ export default function Home() {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/api/stats`)
-      .then((r) => r.json())
-      .then(setStats)
-      .catch(console.error);
+    swr("/api/stats", setStats).catch(console.error);
   }, []);
 
   return (
@@ -39,6 +36,7 @@ export default function Home() {
         </p>
       </div>
 
+      {!stats && <StatsSkeleton />}
       {stats && (
         <div className="stats-grid" style={{ maxWidth: 800, margin: "0 auto 3rem" }}>
           <div className="stat-card">

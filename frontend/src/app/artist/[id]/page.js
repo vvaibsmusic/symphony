@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatDate, formatDateTime } from "../../../utils/dateFormat";
+import { swr, fetchJSON, getCached, clearApiCache } from "../../../utils/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -45,10 +46,10 @@ export default function ArtistDetail() {
 
     const fetchDetail = () => {
         if (!artistId) return;
-        setLoading(true);
-        fetch(`${API}/api/artist/${artistId}?platform=youtube`)
-            .then(r => r.json())
-            .then(d => { setData(d); setLoading(false); })
+        const path = `/api/artist/${artistId}?platform=youtube`;
+        // Cached data renders instantly; a background fetch keeps it fresh
+        if (!getCached(path)) setLoading(true);
+        swr(path, d => { setData(d); setLoading(false); })
             .catch(e => { console.error(e); setLoading(false); });
     };
 
@@ -57,7 +58,8 @@ export default function ArtistDetail() {
     const toggleWatch = async () => {
         try {
             await fetch(`${API}/api/artist/${artistId}/watch`, { method: "POST" });
-            const d = await fetch(`${API}/api/artist/${artistId}?platform=youtube`).then(r => r.json());
+            clearApiCache();
+            const d = await fetchJSON(`/api/artist/${artistId}?platform=youtube`);
             setData(d);
         } catch (e) { console.error(e); }
     };
@@ -67,7 +69,7 @@ export default function ArtistDetail() {
         try {
             await fetch(`${API}/api/artist/${artistId}/collect`, { method: "POST" });
             // Wait for collection to finish, then refresh
-            setTimeout(() => { fetchDetail(); setCollecting(false); }, 8000);
+            setTimeout(() => { clearApiCache(); fetchDetail(); setCollecting(false); }, 8000);
         } catch (e) { console.error(e); setCollecting(false); }
     };
 

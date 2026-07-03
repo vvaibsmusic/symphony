@@ -106,6 +106,14 @@ def init_db():
         conn.commit()
         print("[migration] Added ytmusic_play_count to play_snapshots")
 
+    # Composite indexes for the dashboard's hot queries (latest snapshot per
+    # song by platform, songs by artist+platform, alerts by platform)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_platform_song ON play_snapshots(platform, song_id, id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_song_platform_time ON play_snapshots(song_id, platform, collected_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_songs_artist_platform ON songs(artist_id, platform)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_platform ON viral_alerts(platform)")
+    conn.commit()
+
     conn.close()
     if _USE_TURSO:
         print(f"Database initialized at {_TURSO_URL}")
