@@ -4,6 +4,9 @@ import sys
 import os
 import subprocess
 import asyncio
+import threading
+import time
+import urllib.request
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Any
@@ -17,7 +20,14 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from db import get_connection, init_db
-from metrics import compute_artist_metrics, enrich_song_with_metrics, enrich_viral_alert
+from cache import ttl_cache, invalidate_cache
+from metrics import (
+    compute_artist_metrics,
+    compute_artist_metrics_from_history,
+    compute_track_metrics,
+    enrich_viral_alerts_batch,
+    fetch_snapshots_by_song,
+)
 
 app = FastAPI(title="Music Intelligence Dashboard API", version="1.0.0")
 
@@ -70,8 +80,8 @@ async def _daily_refresh_loop():
         print(f"[scheduler] 🔄 10 AM IST — starting daily refresh")
         _scheduler_state["last_run"] = _now_ist().isoformat()
 
-        # Run YouTube stats refresh using new Go binary
-        start_collector_process("../collector_go/youtube_enricher", "scheduled_yt_stats")
+        # Run YouTube stats refresh using Python collector (local SQLite)
+        start_collector_process("enrich_all.py", "scheduled_yt_stats")
 
         # Wait for it to finish (poll every 10s, max 10 min)
         for _ in range(60):
@@ -85,11 +95,55 @@ async def _daily_refresh_loop():
         await asyncio.sleep(120)
 
 
+# URLs the frontend hits on page load — kept warm so every request is a cache hit.
+_WARM_URLS = [
+    "/api/stats",
+    "/api/spotify/stats",
+    "/api/filters",
+    "/api/quota",
+    "/api/youtube/viral?limit=12",
+    "/api/spotify/viral?limit=12",
+    "/api/watchlist/releases?days=7",
+    "/api/spotify/releases?days=7",
+    "/api/artists?page=1&limit=50&sort_by=views&sort_dir=desc",
+    "/api/spotify/artists?page=1&limit=50&sort_by=popularity&sort_dir=desc",
+]
+
+
+def warm_cache_async(delay: float = 0.5):
+    """Prefetch hot endpoints over loopback HTTP so cache keys match real requests."""
+    def worker():
+        time.sleep(delay)
+        base = f"http://127.0.0.1:{os.environ.get('API_PORT', '8000')}"
+        # Wait for the server to accept connections (fresh boot)
+        for _ in range(30):
+            try:
+                urllib.request.urlopen(base + "/api/scheduler/status", timeout=5).read()
+                break
+            except Exception:
+                time.sleep(1)
+        for path in _WARM_URLS:
+            try:
+                urllib.request.urlopen(base + path, timeout=120).read()
+            except Exception as e:
+                print(f"[warm] {path} failed: {e}")
+        print("[warm] cache warm-up complete")
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def refresh_cache():
+    """Drop cached responses and re-warm in the background after data changes."""
+    invalidate_cache()
+    warm_cache_async()
+
+
 @app.on_event("startup")
 async def startup():
     init_db()
     # Start the daily scheduler in background
     asyncio.create_task(_daily_refresh_loop())
+    warm_cache_async(delay=1.0)
 
 
 @app.get("/api/scheduler/status")
@@ -99,7 +153,7 @@ def get_scheduler_status():
         "active": _scheduler_state["active"],
         "next_run": _scheduler_state.get("next_run"),
         "last_run": _scheduler_state.get("last_run"),
-        "schedule": "Daily at 9:00 AM IST",
+        "schedule": "Daily at 10:00 AM IST",
     }
 
 
@@ -137,7 +191,14 @@ def start_collector_process(script_name: str, run_type: str):
         }
 
     project_dir = str(Path(__file__).parent.parent)
-    script_path = os.path.join(project_dir, "collector", script_name)
+    parts = script_name.split()
+    script_path = os.path.normpath(os.path.join(project_dir, "collector", parts[0]))
+    extra_args = parts[1:]
+    # Python scripts run through the interpreter; compiled binaries (Go) run directly
+    if script_path.endswith(".py"):
+        cmd = [sys.executable, script_path] + extra_args
+    else:
+        cmd = [script_path] + extra_args
     started_at = datetime.now().isoformat()
 
     _collector_state["running"] = True
@@ -149,7 +210,7 @@ def start_collector_process(script_name: str, run_type: str):
         global _collector_state
         try:
             proc = subprocess.Popen(
-                [sys.executable, script_path],
+                cmd,
                 cwd=project_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -162,6 +223,7 @@ def start_collector_process(script_name: str, run_type: str):
             _collector_state["running"] = False
             _collector_state["pid"] = None
             _collector_state["type"] = None
+            refresh_cache()  # collector may have written new snapshots
 
     thread = threading.Thread(target=run_script, daemon=True)
     thread.start()
@@ -444,7 +506,10 @@ def _collect_yt_background(artist_id: str, artist_name: str):
             c.close()
         except Exception as e:
             print(f"[add-by-url] Error collecting YT for '{artist_name}': {e}")
+        finally:
+            refresh_cache()
 
+    refresh_cache()  # make the newly added/updated artist visible immediately
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
 
@@ -523,7 +588,10 @@ def add_artist(req: AddArtistRequest):
             c.close()
         except Exception as e:
             print(f"[add_artist] Error collecting for '{name}': {e}")
+        finally:
+            refresh_cache()
 
+    refresh_cache()  # make the newly added artist visible immediately
     thread = threading.Thread(target=collect_for_artist, daemon=True)
     thread.start()
 
@@ -543,7 +611,10 @@ def collect_spotify_for_artist_background(artist_id: str):
             )
         except Exception as e:
             print(f"[spotify:collect] artist={artist_id} error={e}")
+        finally:
+            refresh_cache()
 
+    refresh_cache()  # make the newly added/updated artist visible immediately
     thread = threading.Thread(target=collect_worker, daemon=True)
     thread.start()
 
@@ -653,6 +724,7 @@ def collect_spotify_single_artist(artist_id: str):
 
 
 @app.get("/api/youtube/viral")
+@ttl_cache(600)
 def get_youtube_viral(limit: int = Query(20, ge=1, le=100)):
     """Get songs that are going viral on YouTube (biggest view count spikes)."""
     conn = get_connection()
@@ -681,12 +753,13 @@ def get_youtube_viral(limit: int = Query(20, ge=1, le=100)):
         ORDER BY va.growth_factor DESC, va.detected_at DESC
         LIMIT ?
     """, (limit,)).fetchall()
-    result = [enrich_viral_alert(conn, dict(r)) for r in rows]
+    result = enrich_viral_alerts_batch(conn, [dict(r) for r in rows], "youtube")
     conn.close()
     return {"viral": result}
 
 
 @app.get("/api/spotify/viral")
+@ttl_cache(600)
 def get_spotify_viral(limit: int = Query(20, ge=1, le=100)):
     """Get songs with biggest Spotify popularity jumps."""
     conn = get_connection()
@@ -716,7 +789,7 @@ def get_spotify_viral(limit: int = Query(20, ge=1, le=100)):
         ORDER BY popularity_delta DESC, va.detected_at DESC
         LIMIT ?
     """, (limit,)).fetchall()
-    result = [enrich_viral_alert(conn, dict(r)) for r in rows]
+    result = enrich_viral_alerts_batch(conn, [dict(r) for r in rows], "spotify")
     conn.close()
     return {"viral": result}
 
@@ -724,6 +797,7 @@ def get_spotify_viral(limit: int = Query(20, ge=1, le=100)):
 # ─── Watchlist New Releases ─────────────────────────────────
 
 @app.get("/api/watchlist/releases")
+@ttl_cache(600)
 def get_watchlist_releases(days: int = Query(7, ge=1, le=30)):
     """Get new releases grouped by watched vs all other artists in the past N days."""
     conn = get_connection()
@@ -764,6 +838,7 @@ def get_watchlist_releases(days: int = Query(7, ge=1, le=30)):
 
 
 @app.get("/api/spotify/releases")
+@ttl_cache(600)
 def get_spotify_releases(days: int = Query(7, ge=1, le=30)):
     """Get Spotify releases grouped by watched vs all other artists in past N days."""
     conn = get_connection()
@@ -806,6 +881,7 @@ def get_spotify_releases(days: int = Query(7, ge=1, le=30)):
 # ─── Artists ────────────────────────────────────────────────
 
 @app.get("/api/artists")
+@ttl_cache(300)
 def get_artists(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=200),
@@ -922,6 +998,7 @@ def get_artists(
 
 
 @app.get("/api/spotify/artists")
+@ttl_cache(300)
 def get_spotify_artists(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=200),
@@ -1020,6 +1097,7 @@ def get_spotify_artists(
 
 
 @app.get("/api/filters")
+@ttl_cache(3600)
 def get_filter_options():
     """Get available genre and region options for filter dropdowns."""
     conn = get_connection()
@@ -1036,8 +1114,14 @@ def get_filter_options():
 # ─── Artist Detail ──────────────────────────────────────────
 
 @app.get("/api/artist/{artist_id}")
+@ttl_cache(300)
 def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
-    """Get an artist's details, songs, and play count history."""
+    """Get an artist's details, songs, and play count history.
+
+    All snapshot history is pulled in one batched query; per-song stats,
+    track metrics, and artist metrics are computed in Python. This keeps
+    the endpoint at 4 DB round trips regardless of how many songs exist.
+    """
     conn = get_connection()
 
     artist = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
@@ -1045,34 +1129,19 @@ def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
         conn.close()
         raise HTTPException(status_code=404, detail="Artist not found")
 
-    # Get songs for this platform
     songs = conn.execute("""
-        SELECT
-            s.*,
+        SELECT s.*,
             (SELECT play_count FROM play_snapshots
-             WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_play_count,
-            (SELECT play_count FROM play_snapshots
-             WHERE song_id = s.id ORDER BY collected_at ASC LIMIT 1) as first_play_count,
-            (SELECT like_count FROM play_snapshots
-             WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_like_count,
-            (SELECT comment_count FROM play_snapshots
-             WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) as latest_comment_count,
-            (SELECT ytmusic_play_count FROM play_snapshots
-             WHERE song_id = s.id AND ytmusic_play_count IS NOT NULL ORDER BY collected_at DESC LIMIT 1) as ytmusic_play_count,
-            CASE WHEN (SELECT play_count FROM play_snapshots
-                       WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1) > 0
-            THEN ROUND(CAST(
-                (SELECT like_count + comment_count FROM play_snapshots
-                 WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1)
-                AS REAL) * 100.0 / (SELECT play_count FROM play_snapshots
-                 WHERE song_id = s.id ORDER BY collected_at DESC LIMIT 1), 2)
-            ELSE 0 END as engagement_rate
+             WHERE song_id = s.id ORDER BY collected_at ASC LIMIT 1) as first_play_count
         FROM songs s
         WHERE s.artist_id = ? AND s.platform = ?
-        ORDER BY latest_play_count DESC NULLS LAST
     """, (artist_id, platform)).fetchall()
 
-    # Get viral alerts for this artist
+    song_dicts = [dict(s) for s in songs]
+    snaps_by_song = fetch_snapshots_by_song(
+        conn, [s["id"] for s in song_dicts], platform, per_song_limit=30
+    )
+
     alerts = conn.execute("""
         SELECT va.*, s.title, s.platform_id
         FROM viral_alerts va
@@ -1082,22 +1151,38 @@ def get_artist_detail(artist_id: str, platform: str = Query("youtube")):
         LIMIT 10
     """, (artist_id, platform)).fetchall()
 
-    # Compute artist-level aggregated metrics
-    artist_metrics = compute_artist_metrics(conn, artist_id, platform)
-
-    # Enrich each song with track-level metrics
-    enriched_songs = [enrich_song_with_metrics(conn, dict(s), platform) for s in songs]
-
     conn.close()
+
+    for song in song_dicts:
+        snaps = snaps_by_song.get(song["id"], [])
+        latest = snaps[0] if snaps else None
+        song["latest_play_count"] = latest["play_count"] if latest else None
+        song["latest_like_count"] = latest["like_count"] if latest else None
+        song["latest_comment_count"] = latest["comment_count"] if latest else None
+        song["ytmusic_play_count"] = next(
+            (s["ytmusic_play_count"] for s in snaps if s.get("ytmusic_play_count") is not None), None
+        )
+        if latest and (latest["play_count"] or 0) > 0:
+            song["engagement_rate"] = round(
+                ((latest["like_count"] or 0) + (latest["comment_count"] or 0))
+                * 100.0 / latest["play_count"], 2
+            )
+        else:
+            song["engagement_rate"] = 0
+        song["metrics"] = compute_track_metrics(snaps)
+
+    song_dicts.sort(key=lambda s: (s["latest_play_count"] is None, -(s["latest_play_count"] or 0)))
+
     return {
         "artist": row_to_dict(artist),
-        "metrics": artist_metrics,
-        "songs": enriched_songs,
+        "metrics": compute_artist_metrics_from_history(snaps_by_song),
+        "songs": song_dicts,
         "viral_alerts": rows_to_list(alerts),
     }
 
 
 @app.get("/api/spotify/artist/{artist_id}")
+@ttl_cache(300)
 def get_spotify_artist_detail(artist_id: str):
     """Get Spotify artist details, songs, and popularity alerts."""
     conn = get_connection()
@@ -1149,6 +1234,7 @@ def get_spotify_artist_detail(artist_id: str):
 # ─── Song Play History ──────────────────────────────────────
 
 @app.get("/api/song/{song_id}/history")
+@ttl_cache(300)
 def get_song_history(song_id: str):
     """Get play count history for a specific song."""
     conn = get_connection()
@@ -1177,6 +1263,7 @@ def toggle_watchlist(artist_id: str):
     conn.execute("UPDATE artists SET is_watched = ? WHERE id = ?", (new_status, artist_id))
     conn.commit()
     conn.close()
+    refresh_cache()
     return {"artist_id": artist_id, "is_watched": bool(new_status)}
 
 
@@ -1212,6 +1299,7 @@ def delete_artist(artist_id: str):
     conn.execute("DELETE FROM artists WHERE id = ?", (artist_id,))
     conn.commit()
     conn.close()
+    refresh_cache()
 
     return {
         "status": "deleted",
@@ -1223,76 +1311,74 @@ def delete_artist(artist_id: str):
 # ─── Dashboard Stats ────────────────────────────────────────
 
 @app.get("/api/stats")
+@ttl_cache(600)
 def get_stats():
-    """Get overall dashboard statistics."""
+    """Get overall dashboard statistics (single round trip to the DB)."""
     conn = get_connection()
-    stats = {
-        "total_artists": conn.execute("SELECT COUNT(*) FROM artists").fetchone()[0],
-        "total_songs": conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0],
-        "yt_songs": conn.execute("SELECT COUNT(*) FROM songs WHERE platform = 'youtube'").fetchone()[0],
-        "spotify_songs": conn.execute("SELECT COUNT(*) FROM songs WHERE platform = 'spotify'").fetchone()[0],
-        "viral_alerts": conn.execute("SELECT COUNT(*) FROM viral_alerts WHERE status = 'new'").fetchone()[0],
-        "watched_artists": conn.execute("SELECT COUNT(*) FROM artists WHERE is_watched = 1").fetchone()[0],
-        "last_collection": row_to_dict(conn.execute(
-            "SELECT MAX(collected_at) as last_run FROM play_snapshots"
-        ).fetchone()),
-    }
+    row = conn.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM artists) as total_artists,
+            (SELECT COUNT(*) FROM songs) as total_songs,
+            (SELECT COUNT(*) FROM songs WHERE platform = 'youtube') as yt_songs,
+            (SELECT COUNT(*) FROM songs WHERE platform = 'spotify') as spotify_songs,
+            (SELECT COUNT(*) FROM viral_alerts WHERE status = 'new') as viral_alerts,
+            (SELECT COUNT(*) FROM artists WHERE is_watched = 1) as watched_artists,
+            (SELECT MAX(collected_at) FROM play_snapshots) as last_run
+    """).fetchone()
     conn.close()
-    return stats
+    return {
+        "total_artists": row["total_artists"],
+        "total_songs": row["total_songs"],
+        "yt_songs": row["yt_songs"],
+        "spotify_songs": row["spotify_songs"],
+        "viral_alerts": row["viral_alerts"],
+        "watched_artists": row["watched_artists"],
+        "last_collection": {"last_run": row["last_run"]},
+    }
 
 
 @app.get("/api/spotify/stats")
+@ttl_cache(600)
 def get_spotify_stats():
-    """Get Spotify dashboard statistics."""
+    """Get Spotify dashboard statistics (single round trip to the DB)."""
     conn = get_connection()
-    stats = {
-        "total_artists": conn.execute(
-            "SELECT COUNT(*) FROM artists WHERE spotify_id IS NOT NULL"
-        ).fetchone()[0],
-        "spotify_songs": conn.execute(
-            "SELECT COUNT(*) FROM songs WHERE platform = 'spotify'"
-        ).fetchone()[0],
-        "watched_artists": conn.execute(
-            "SELECT COUNT(*) FROM artists WHERE spotify_id IS NOT NULL AND is_watched = 1"
-        ).fetchone()[0],
-        "viral_alerts": conn.execute(
-            "SELECT COUNT(*) FROM viral_alerts WHERE platform = 'spotify' AND status = 'new'"
-        ).fetchone()[0],
-        "last_collection": row_to_dict(
-            conn.execute(
-                "SELECT MAX(collected_at) as last_run FROM play_snapshots WHERE platform = 'spotify'"
-            ).fetchone()
-        ),
-    }
+    row = conn.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM artists WHERE spotify_id IS NOT NULL) as total_artists,
+            (SELECT COUNT(*) FROM songs WHERE platform = 'spotify') as spotify_songs,
+            (SELECT COUNT(*) FROM artists WHERE spotify_id IS NOT NULL AND is_watched = 1) as watched_artists,
+            (SELECT COUNT(*) FROM viral_alerts WHERE platform = 'spotify' AND status = 'new') as viral_alerts,
+            (SELECT MAX(collected_at) FROM play_snapshots WHERE platform = 'spotify') as last_run
+    """).fetchone()
     conn.close()
-    return stats
+    return {
+        "total_artists": row["total_artists"],
+        "spotify_songs": row["spotify_songs"],
+        "watched_artists": row["watched_artists"],
+        "viral_alerts": row["viral_alerts"],
+        "last_collection": {"last_run": row["last_run"]},
+    }
 
 
 # ─── API Quota Tracking ────────────────────────────────────
 
 @app.get("/api/quota")
+@ttl_cache(60)
 def get_quota():
     """Get today's YouTube API quota usage."""
     conn = get_connection()
     # 2 API keys from different projects = 20K total
     DAILY_LIMIT = 20000
 
-    # Get usage for today (UTC)
-    today_usage = conn.execute("""
-        SELECT COALESCE(SUM(units_used), 0) as used_today
-        FROM api_quota_log
-        WHERE date(created_at) = date('now')
-    """).fetchone()
-
-    used = today_usage["used_today"] if today_usage else 0
-
-    # Breakdown by operation today
+    # Breakdown by operation today; total usage is derived from it
     breakdown = conn.execute("""
         SELECT operation, SUM(units_used) as total,  COUNT(*) as calls
         FROM api_quota_log
         WHERE date(created_at) = date('now')
         GROUP BY operation
     """).fetchall()
+
+    used = sum(r["total"] or 0 for r in breakdown)
 
     # Estimate cost of a full refresh
     artist_count = conn.execute("SELECT COUNT(*) FROM artists").fetchone()[0]
@@ -1332,6 +1418,7 @@ def log_quota(operation: str, units: int, details: str = ""):
 # ─── Global Search ──────────────────────────────────────────
 
 @app.get("/api/search/global")
+@ttl_cache(60)
 def global_search(q: str = Query(..., min_length=1)):
     """Search across artists and songs."""
     conn = get_connection()
@@ -1367,6 +1454,7 @@ def global_search(q: str = Query(..., min_length=1)):
 
 
 @app.get("/api/spotify/search/global")
+@ttl_cache(60)
 def spotify_global_search(q: str = Query(..., min_length=1)):
     """Search across Spotify artists and songs."""
     conn = get_connection()
@@ -1496,6 +1584,8 @@ def collect_for_single_artist(artist_id: str):
             c.close()
         except Exception as e:
             print(f"[collect] Error for '{name}': {e}")
+        finally:
+            refresh_cache()
 
     thread = threading.Thread(target=do_collect, daemon=True)
     thread.start()
