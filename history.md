@@ -1,64 +1,76 @@
-# Symphony Dashboard — Performance Audit & Work History
+# Symphony Project - Knowledge Transfer (KT)
 
-## ✅ Completed Work
+Welcome, Claude Fable! This document serves as a complete Knowledge Transfer for the "Symphony" music intelligence dashboard. The user is transitioning the project to you to resolve ongoing bugs and stabilize the application.
 
-### 1. Database Infrastructure
-- **Turso Migration:** Migrated all 137,578 `play_snapshots`, 6,518 `songs`, and 85 `viral_alerts` to remote Turso cloud database.
-- **Connection Pooling:** Global persistent connection in `collector/db.py` with:
-  - **Auto-reconnect:** If idle >30s, runs `SELECT 1` health check; if stale, transparently reconnects
-  - **Thread safety:** `threading.Lock` protects connection creation/health check from concurrent uvicorn worker threads
-  - **Graceful no-op close:** `conn.close()` is a no-op so pooled connection survives across requests
-- **6 Composite Indexes** auto-created once per process via `ensure_indexes()` with `_INDEXES_CREATED` flag:
-  - `play_snapshots(song_id, platform, collected_at DESC)`
-  - `songs(artist_id, platform)`
-  - `viral_alerts(platform)`
-  - `artists(spotify_id)`
-  - `play_snapshots(platform, song_id)`
-  - `artists(is_watched)`
+## 1. Architecture Overview
 
-### 2. Backend Query Optimization (api/main.py)
-Every correlated subquery pattern has been eliminated:
-- **YouTube Artists** (`GET /api/artists`): Uses CTEs ✅
-- **Spotify Artists** (`GET /api/spotify/artists`): Rewrote 4 correlated subqueries → CTE with `song_stats`
-- **Artist Detail** (`GET /api/artist/{id}`): Rewrote 7 correlated subqueries per song → **scoped** `artist_song_ids` + `latest_snaps` + `first_snaps` CTEs (scans only the artist's ~30 songs, not all 137K snapshots)
-- **Spotify Artist Detail** (`GET /api/spotify/artist/{id}`): Same scoped CTE pattern
-- **Watchlist Releases** (`GET /api/watchlist/releases`): Merged 2 queries → single CTE + Python split
-- **Spotify Releases** (`GET /api/spotify/releases`): Same CTE merge pattern
-- **YouTube Viral** (`GET /api/youtube/viral`): N+1 loop → `enrich_viral_alerts_bulk` (1 query)
-- **Spotify Viral** (`GET /api/spotify/viral`): Same bulk enrichment
-- **Stats** (`GET /api/stats`): 7 queries → 2 queries + **cached 60s via `ttl_cache`**
-- **Filters** (`GET /api/filters`): **Cached 300s via `ttl_cache`** (genres/regions rarely change)
-- **Global Search** (`GET /api/search/global`): Correlated subqueries → CTE/JOIN
-- **Spotify Search** (`GET /api/spotify/search/global`): Same CTE/JOIN approach
+Symphony is a full-stack dashboard deployed on **Hugging Face Spaces (Docker)**. It tracks viral songs, new releases, and artist analytics across YouTube and Spotify.
 
-### 3. Backend Metrics (api/metrics.py)
-- **`compute_artist_metrics`**: Loop of 10 queries → single `GROUP BY ps.cycle_id`
-- **`_compute_artist_metrics_legacy`**: Full-table-scan → artist-scoped CTE
-- **`enrich_viral_alerts_bulk`**: Bulk fetch via window functions
+- **Frontend**: Next.js 14 (App Router). Located in `frontend/`. 
+  - Originally used standard `<table>`, but was recently migrated to `TableVirtuoso` (`react-virtuoso`) for fast rendering of large artist lists.
+  - Client-side data fetching calls `/api/...`.
+- **Backend**: FastAPI (Python). Located in `api/main.py`.
+  - Serves JSON stats to the frontend.
+  - Runs a background asyncio scheduler (`_daily_refresh_loop`) that triggers the data collectors every day at 10 AM IST.
+- **Data Collectors**: 
+  - Originally written in Python, but the **YouTube Collector was recently migrated to Go (Golang)** for speed. Located in `collector_go/`. 
+  - The Go binary (`youtube_enricher`) is compiled during the Docker build and executed by the Python backend via `subprocess`.
+- **Database**: Turso (Edge SQLite). 
+  - Interacted with using `libsql-experimental` in Python and `github.com/tursodatabase/libsql-client-go/libsql` in Go.
+  - Environment variables: `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+- **Deployment**: Hugging Face Spaces.
+  - A custom `Dockerfile` installs Node, Python, and Go.
+  - It builds Next.js, compiles the Go binary, and uses a `start.sh` script to run the FastAPI backend and Next.js frontend concurrently using a reverse proxy (Next.js rewrites `/api/:path*` to `http://127.0.0.1:8000`).
 
-### 4. Caching Layer (api/cache.py)
-- Thread-safe in-memory TTL cache decorator
-- Applied to `stats` (60s TTL) and `filters` (300s TTL)
-- `invalidate_cache()` called after: watch toggle, artist deletion
+## 2. Recent Major Changes (Context for Bugs)
 
-### 5. Edge Case Fixes
-- **`is_watched` comparison**: Uses `int(artist["is_watched"] or 0)` to safely handle string/NULL/int from Turso
-- **`ensure_indexes()` run-once**: `_INDEXES_CREATED` flag prevents re-running 6 CREATE INDEX statements on every import
-- **Test files removed**: `test_db.py`, `test_perf.py`, `test_perf_artist.py` deleted + added to `.gitignore`
+1. **Turso Migration**: The DB was moved from local SQLite to remote Turso. 
+   - **Impact**: We had to write a custom `LibsqlDictCursor` in `collector/db.py` to make `libsql` behave like `sqlite3.Row`.
+2. **Go Collector Migration**: The YouTube collector was rewritten in Go (`collector_go/youtube.go`).
+   - **Impact**: Python backend now triggers a Go binary instead of calling a Python function.
+3. **Frontend Virtualization**: Added `TableVirtuoso` to fix frontend lag.
+   - **Impact**: Required converting server components to client components (`"use client"`), which caused `forwardRef` React crashes until `import React from 'react'` was explicitly added.
 
-### 6. Frontend Fixes
-- `toggleWatch` no longer re-fetches all 6 endpoints (only re-fetches artists)
-- `setInterval` polling has proper error handling + cleanup
-- Artist leaderboard images have `loading="lazy"`
-- Removed duplicate Inter font `@import` in `globals.css`
+## 3. Known Issues & Bugs (What You Need to Fix)
 
----
+Here is a list of the exact issues the system has been fighting recently. You should verify if my recent patches fully resolved them or if they need further fixing:
 
-## 📋 Remaining Frontend Optimization (Lower Priority)
-These won't dramatically affect perceived load time now that backend is fast:
+### Issue A: "New UI is not reflecting / stuck on Loading" (N+1 Query Timeout)
+- **Symptom**: The frontend stays on the "Loading..." spinner forever. 
+- **Cause**: In `api/main.py`, the `get_artists()` and `get_spotify_artists()` endpoints were performing correlated subqueries (`SELECT MAX(id) FROM play_snapshots GROUP BY song_id`) for *every single song* to calculate stats. Over a remote Turso network connection, this took > 60 seconds and timed out (`context deadline exceeded`).
+- **Status**: I *just* rewrote the SQL queries using Common Table Expressions (CTEs) to do a single fast join. You should verify if this fully fixed the loading issue or if the CTEs have syntax errors / missing columns.
 
-1. **Client-side caching**: Consider SWR or React Query to avoid re-fetching on navigation
-2. **`next/image`**: Migrate raw `<img>` tags for WebP/AVIF + responsive sizing
-3. **Server Components**: Some pages could be partially SSR'd instead of fully `"use client"`
-4. **CSS Modules**: 48KB inline `style={{}}` in `youtube/page.js` should be CSS classes
-5. **Song table pagination**: `artist/[id]/page.js` renders all songs without pagination
+### Issue B: Turso / Libsql Type Strictness
+- **Symptom**: 500 Internal Server Error in FastAPI.
+- **Cause**: Standard `sqlite3` allows passing SQL parameters as a Python `list` (e.g., `conn.execute(sql, [limit, offset])`). `libsql-experimental` strictly requires a `tuple` and throws `TypeError: argument 'parameters': 'list' object cannot be converted to 'PyTuple'`.
+- **Status**: I added a patch in `collector/db.py` inside `LibsqlDictConnection.execute()` to automatically do `params = tuple(params)` if a list is passed. Check if there are other `.execute()` calls bypassing this wrapper.
+
+### Issue C: Next.js API Routing on Hugging Face
+- **Symptom**: `fetch()` calls failing in the browser because they tried to reach `http://localhost:8000`.
+- **Cause**: On HF Spaces, `localhost` resolves to the user's browser, not the Docker container. 
+- **Status**: Fixed by setting `NEXT_PUBLIC_API_URL=""` in the Dockerfile so Next.js uses relative paths (e.g., `/api/artists`), which are then caught by `next.config.mjs` rewrites and proxied to the Python backend locally within the container. Verify that NO files in `frontend/src/` still hardcode `localhost`.
+
+### Issue D: Hugging Face Startup Race Condition
+- **Symptom**: Next.js throws 502 errors when the Space first boots up.
+- **Cause**: Next.js starts before FastAPI (Uvicorn) is fully ready to accept connections.
+- **Status**: Modified `start.sh` to include a `while ! curl -s http://127.0.0.1:8000/api/stats > /dev/null; do sleep 1; done` loop before starting Next.js. 
+
+## 4. Development Guide for Fable
+
+- **To run backend locally**: 
+  ```bash
+  cd hf-symphony
+  source venv/bin/activate
+  cd api
+  uvicorn main:app --port 8000 --reload
+  ```
+- **To run frontend locally**:
+  ```bash
+  cd hf-symphony/frontend
+  npm run dev
+  ```
+- **Local DB Testing**: Ensure you have `libsql-experimental` installed in the python environment (`pip install libsql-experimental`), otherwise `collector/db.py` falls back to standard local sqlite, masking Turso-specific bugs.
+- **Logs**: If Hugging Face is crashing, always check the `logs/build` or `logs/container` in the Space UI to see if Uvicorn threw a Python traceback.
+- **Syncing**: Keep in mind there are two repos in the workspace (`hf-symphony` and `symphony/music-dashboard`). If you make fixes, make sure they are applied to the `hf-symphony` codebase, committed, and pushed.
+
+Good luck! Optimize intelligently and double-check your SQL syntax.
