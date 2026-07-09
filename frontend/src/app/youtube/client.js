@@ -312,12 +312,15 @@ export default function YouTubeDashboard() {
                 {/* whats hot */}
                 <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                        <span style={{ fontSize: "16px" }}>🔥</span><span style={{ fontWeight: 600, fontSize: "16px" }}>What's Hot</span>
+                        <span style={{ fontSize: "16px" }}>🏆</span><span style={{ fontWeight: 600, fontSize: "16px" }}>Viral Leaderboard</span>
                         <span style={{ font: "500 10px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.35)", letterSpacing: ".5px", marginLeft: "2px" }}>SPIKE DETECTED · 24H</span>
                     </div>
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
                         {hot.length > 0 ? hot.map((h, idx) => (
                             <Link href={`/artist/${h.id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                                <div style={{ width: "24px", textAlign: "center", fontWeight: 800, fontSize: "16px", color: idx < 3 ? "#FF5238" : "rgba(255,255,255,.4)", flex: "none" }}>
+                                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
+                                </div>
                                 <div style={{ width: "42px", height: "42px", borderRadius: "9px", background: h.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px", color: "rgba(255,255,255,.88)" }}>{h.ini}</div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h.title}</div>

@@ -834,14 +834,17 @@ export default function SpotifyDashboard() {
       <div className="section">
         <div className="section-header">
           <h2 className="section-title">
-            <span className="icon">🔥</span> What&apos;s Hot?
+            <span className="icon">🏆</span> Viral Leaderboard
           </h2>
         </div>
         {viral.length > 0 ? (
           <div className="viral-grid">
-            {viral.map((v) => (
+            {viral.map((v, idx) => (
               <Link href={`/spotify/artist/${v.artist_id}`} key={v.alert_id}>
                 <div className="viral-card">
+                  <div style={{ position: "absolute", top: -8, left: -8, background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "13px", zIndex: 10, color: idx < 3 ? "var(--text-primary)" : "var(--text-muted)", boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }}>
+                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
+                  </div>
                   {v.thumbnail_url ? (
                     <img src={v.thumbnail_url} alt={v.title} className="viral-thumbnail" />
                   ) : (
