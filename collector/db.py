@@ -8,85 +8,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-try:
-    import libsql_experimental as libsql
-except ImportError:
-    libsql = None
-
 DB_PATH = Path(__file__).parent.parent / "db" / "music_dashboard.db"
 SCHEMA_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
 
-# Determine connection mode based on environment variables
-_TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
-_TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
-_USE_TURSO = bool(_TURSO_URL and _TURSO_TOKEN)
-
-
-class RowDict(dict):
-    def __getitem__(self, key):
-        if isinstance(key, int):
-            return list(self.values())[key]
-        return super().__getitem__(key)
-
-class LibsqlDictCursor:
-    def __init__(self, rs):
-        self.rs = rs
-        self.description = rs.description
-
-    def fetchone(self):
-        row = self.rs.fetchone()
-        if not row: return None
-        cols = [col[0] for col in self.description]
-        return RowDict(zip(cols, row))
-
-    def fetchall(self):
-        rows = self.rs.fetchall()
-        cols = [col[0] for col in self.description]
-        return [RowDict(zip(cols, row)) for row in rows]
-
-class LibsqlDictConnection:
-    def __init__(self, conn):
-        self.conn = conn
-
-    def execute(self, sql, params=()):
-        if isinstance(params, list):
-            params = tuple(params)
-        return LibsqlDictCursor(self.conn.execute(sql, params))
-
-    def executescript(self, sql):
-        self.conn.executescript(sql)
-
-    def commit(self):
-        self.conn.commit()
-
-    def close(self):
-        # some versions of libsql don't have close, use safe getattr
-        if hasattr(self.conn, "close"):
-            self.conn.close()
 
 def get_connection():
     """Get a SQLite connection with WAL mode for better concurrency."""
-    if _USE_TURSO:
-        if libsql is None:
-            raise ImportError(
-                "libsql_experimental is required for Turso connections. "
-                "Install it with: pip install libsql-experimental"
-            )
-        conn = libsql.connect(_TURSO_URL, auth_token=_TURSO_TOKEN)
-        return LibsqlDictConnection(conn)
-    else:
-        # Local SQLite fallback for development
-        conn = sqlite3.connect(str(DB_PATH))
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+    os.makedirs(DB_PATH.parent, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
 
 
 def init_db():
     """Initialize the database from schema.sql and run migrations."""
-    if not _USE_TURSO:
-        os.makedirs(DB_PATH.parent, exist_ok=True)
+    os.makedirs(DB_PATH.parent, exist_ok=True)
     conn = get_connection()
     with open(SCHEMA_PATH, "r") as f:
         conn.executescript(f.read())
@@ -115,10 +53,7 @@ def init_db():
     conn.commit()
 
     conn.close()
-    if _USE_TURSO:
-        print(f"Database initialized at {_TURSO_URL}")
-    else:
-        print(f"Database initialized at {DB_PATH}")
+    print(f"Database initialized at {DB_PATH}")
 
 
 def upsert_artist(conn, artist: dict):
