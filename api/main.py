@@ -1544,24 +1544,35 @@ def collect_for_single_artist(artist_id: str):
     name = artist["name"]
     conn.close()
 
-    _collect_state[artist_id] = {"status": "collecting", "songs": 0, "error": None}
+    _collect_state[artist_id] = {"status": "collecting", "songs": 0, "error": None, "log": []}
 
     def do_collect():
+        log = []
+        def _log(msg):
+            log.append(msg)
+            print(f"[collect:{artist_id}] {msg}", flush=True)
+
         try:
             from youtube_client import YouTubeClient
             from db import get_connection as get_conn
             from collector import generate_song_id
 
             c = get_conn()
+            _log("DB connection OK")
+
             yt = YouTubeClient()
+            _log(f"YouTubeClient init: yt_api={'yes' if yt.youtube else 'no'}, ytmusic={'yes' if yt.ytmusic else 'no'}")
 
             # Try ytmusicapi first for song discovery
             songs = yt.get_artist_songs_ytmusic(None, name)
+            _log(f"get_artist_songs_ytmusic returned {len(songs) if songs else 0} songs")
 
             # If ytmusicapi returns 0, try search-based approach
             if not songs and yt.ytmusic:
+                songs = []
                 try:
                     search = yt.ytmusic.search(name, filter="songs", limit=30)
+                    _log(f"ytmusic.search returned {len(search)} results")
                     for item in search:
                         vid = item.get("videoId")
                         if not vid:
@@ -1578,14 +1589,54 @@ def collect_for_single_artist(artist_id: str):
                                 "thumbnail": yt._get_best_thumbnail(item.get("thumbnails", [])),
                                 "artists": ", ".join(artists_list),
                             })
-                    print(f"  [search-fallback] Found {len(songs)} songs for '{name}'", flush=True)
+                    _log(f"Search fallback matched {len(songs)} songs for '{name}'")
                 except Exception as e:
-                    print(f"  [search-fallback] Error for '{name}': {e}", flush=True)
+                    _log(f"Search fallback error: {e}")
+
+            if not songs:
+                # Last resort: use YouTube Data API channel search
+                if yt.youtube:
+                    try:
+                        from googleapiclient.discovery import Resource
+                        from typing import cast, Any as _Any
+                        yt_api = cast(_Any, yt.youtube)
+                        channel_id = None
+                        # Look up channel_id from DB
+                        artist_row = c.execute("SELECT youtube_channel_id FROM artists WHERE id = ?", (artist_id,)).fetchone()
+                        if artist_row:
+                            channel_id = artist_row["youtube_channel_id"]
+                        if channel_id:
+                            _log(f"Trying YouTube Data API search for channel {channel_id}")
+                            search_resp = yt_api.search().list(
+                                channelId=channel_id,
+                                part="snippet",
+                                type="video",
+                                order="viewCount",
+                                maxResults=50,
+                            ).execute()
+                            items = search_resp.get("items", [])
+                            _log(f"YouTube Data API returned {len(items)} videos")
+                            songs = []
+                            for item in items:
+                                vid = item.get("id", {}).get("videoId")
+                                if not vid:
+                                    continue
+                                snippet = item.get("snippet", {})
+                                songs.append({
+                                    "title": snippet.get("title", "Unknown"),
+                                    "video_id": vid,
+                                    "album": None,
+                                    "views": 0,
+                                    "thumbnail": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
+                                })
+                    except Exception as e:
+                        _log(f"YouTube Data API fallback error: {e}")
 
             if songs:
                 # Get accurate stats from YouTube Data API
                 video_ids = [s["video_id"] for s in songs if s.get("video_id")]
                 video_stats = yt.get_video_stats(video_ids) if video_ids else {}
+                _log(f"Got video stats for {len(video_stats)}/{len(video_ids)} videos")
 
                 for song in songs:
                     vid = song.get("video_id")
@@ -1616,17 +1667,17 @@ def collect_for_single_artist(artist_id: str):
                     """, (song_id, views, likes, comments, ytmusic_views))
 
                 c.commit()
-                print(f"[collect] Got {len(songs)} songs for '{name}' (API stats for {len(video_stats)})", flush=True)
+                _log(f"Committed {len(songs)} songs to DB")
             else:
-                print(f"[collect] No songs found for '{name}'", flush=True)
+                _log("No songs found from any source")
 
             c.close()
-            _collect_state[artist_id] = {"status": "done", "songs": len(songs), "error": None}
+            _collect_state[artist_id] = {"status": "done", "songs": len(songs), "error": None, "log": log}
         except Exception as e:
             import traceback
-            err_msg = f"{e}\n{traceback.format_exc()}"
-            print(f"[collect] Error for '{name}': {err_msg}", flush=True)
-            _collect_state[artist_id] = {"status": "error", "songs": 0, "error": str(e)}
+            err_msg = str(e)
+            _log(f"EXCEPTION: {err_msg}\n{traceback.format_exc()}")
+            _collect_state[artist_id] = {"status": "error", "songs": 0, "error": err_msg, "log": log}
         finally:
             refresh_cache()
 
