@@ -32,7 +32,12 @@ class YouTubeClient:
     """Fetches song data from YouTube using Data API v3 and/or ytmusicapi."""
 
     def __init__(self):
-        self.api_key = os.getenv("YOUTUBE_API_KEY")
+        self.api_key = (
+            os.getenv("YOUTUBE_API_KEY")
+            or os.getenv("YOUTUBE_API_KEY_2")
+            or os.getenv("YOUTUBE_API_KEY_3")
+            or os.getenv("YOUTUBE_API_KEY_4")
+        )
         self.youtube: Optional[googleapiclient.discovery.Resource] = None
         self.ytmusic: Optional[YTMusic] = None
 
