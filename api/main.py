@@ -209,12 +209,14 @@ def start_collector_process(script_name: str, run_type: str):
     def run_script():
         global _collector_state
         try:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=project_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
+            log_path = os.path.join(project_dir, "collector.log")
+            with open(log_path, "w", encoding="utf-8") as f:
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=project_dir,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                )
             _collector_state["pid"] = proc.pid
             proc.wait()
         except Exception as e:
@@ -270,7 +272,8 @@ def refresh_status():
     message = ""
     if _collector_state["running"]:
         try:
-            with open("collector.log", "r", encoding="utf-8") as f:
+            log_path = os.path.join(project_dir, "collector.log")
+            with open(log_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 for line in reversed(lines):
                     line = line.strip()
