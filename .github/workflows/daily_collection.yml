@@ -11,27 +11,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install -r collector/requirements.txt
-
-      - name: Run collector
+      - name: Trigger YouTube Discover
         env:
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-        run: python collector/collector.py
-
-      - name: Keep HF Space alive
-        env:
-          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL }}
+          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL || 'https://vvaibsmusic-symphony.hf.space' }}
         run: |
-          echo "Pinging HF Space to keep it alive..."
-          curl -sSf "${HF_SPACE_URL}/api/scheduler/status" || echo "HF Space ping failed (non-fatal)"
+          echo "Triggering YouTube Discover..."
+          curl -X POST -sSf "${HF_SPACE_URL}/api/refresh/discover"
+
+      - name: Trigger YouTube Stats
+        env:
+          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL || 'https://vvaibsmusic-symphony.hf.space' }}
+        run: |
+          echo "Triggering YouTube Stats..."
+          curl -X POST -sSf "${HF_SPACE_URL}/api/refresh/stats"
+
+      - name: Trigger Spotify Stats
+        env:
+          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL || 'https://vvaibsmusic-symphony.hf.space' }}
+        run: |
+          echo "Triggering Spotify Stats..."
+          curl -X POST -sSf "${HF_SPACE_URL}/api/refresh/spotify/stats"
