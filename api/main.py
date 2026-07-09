@@ -574,60 +574,12 @@ def add_artist(req: AddArtistRequest):
     conn.close()
 
     # Collect songs in background
-    def collect_for_artist():
-        try:
-            from youtube_client import YouTubeClient
-            from db import get_connection as get_conn, init_db as db_init
-            from collector import generate_song_id
-
-            db_init()
-            c = get_conn()
-            yt = YouTubeClient()
-            songs = yt.get_artist_songs_ytmusic(None, name)
-            if songs:
-                # Get accurate stats from YouTube Data API
-                video_ids = [s["video_id"] for s in songs if s.get("video_id")]
-                video_stats = yt.get_video_stats(video_ids) if video_ids else {}
-
-                for song in songs:
-                    vid = song.get("video_id")
-                    if not vid:
-                        continue
-                    song_id = generate_song_id("youtube", vid)
-                    stats: dict[str, Any] = dict(video_stats.get(vid, {}))
-                    ytmusic_views = song.get("views", 0) or 0
-                    views = stats.get("views", ytmusic_views) or 0
-                    likes = stats.get("likes", 0)
-                    comments = stats.get("comments", 0)
-                    title = stats.get("title") or song.get("title", "Unknown")
-                    thumbnail = stats.get("thumbnail") or song.get("thumbnail", "")
-                    release_date = stats.get("published_at", "")
-                    if release_date and "T" in release_date:
-                        release_date = release_date.split("T")[0]
-                    elif song.get("release_year"):
-                        release_date = str(song["release_year"])
-
-                    c.execute("""
-                        INSERT OR REPLACE INTO songs (id, artist_id, title, platform, platform_id, album_name, release_date, thumbnail_url, created_at)
-                        VALUES (?, ?, ?, 'youtube', ?, ?, ?, ?, datetime('now'))
-                    """, (song_id, slug, title, vid, song.get("album"), release_date, thumbnail))
-
-                    c.execute("""
-                        INSERT INTO play_snapshots (song_id, play_count, like_count, comment_count, ytmusic_play_count, platform, collected_at)
-                        VALUES (?, ?, ?, ?, ?, 'youtube', datetime('now'))
-                    """, (song_id, views, likes, comments, ytmusic_views))
-
-                c.commit()
-                print(f"[add_artist] Collected {len(songs)} songs for '{name}' (API stats for {len(video_stats)})")
-            c.close()
-        except Exception as e:
-            print(f"[add_artist] Error collecting for '{name}': {e}")
-        finally:
-            refresh_cache()
+    try:
+        collect_for_single_artist(slug)
+    except Exception as e:
+        print(f"Failed to start background collection for {slug}: {e}")
 
     refresh_cache()  # make the newly added artist visible immediately
-    thread = threading.Thread(target=collect_for_artist, daemon=True)
-    thread.start()
 
     return {"status": "added", "artist": row_to_dict(artist), "message": f"Added '{name}'. Songs are being collected in the background."}
 
@@ -1605,6 +1557,18 @@ def collect_for_single_artist(artist_id: str):
                         artist_row = c.execute("SELECT youtube_channel_id FROM artists WHERE id = ?", (artist_id,)).fetchone()
                         if artist_row:
                             channel_id = artist_row["youtube_channel_id"]
+                            
+                        if not channel_id:
+                            _log(f"No channel ID in DB, searching YouTube Data API for '{name}'")
+                            chan_search = yt_api.search().list(q=name, part="id,snippet", type="channel", maxResults=1).execute()
+                            chan_items = chan_search.get("items", [])
+                            if chan_items:
+                                channel_id = chan_items[0].get("id", {}).get("channelId")
+                                if channel_id:
+                                    _log(f"Found channel ID {channel_id}, saving to DB")
+                                    c.execute("UPDATE artists SET youtube_channel_id = ? WHERE id = ?", (channel_id, artist_id))
+                                    c.commit()
+
                         if channel_id:
                             _log(f"Trying YouTube Data API search for channel {channel_id}")
                             search_resp = yt_api.search().list(
