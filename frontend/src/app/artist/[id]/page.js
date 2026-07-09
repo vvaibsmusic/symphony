@@ -67,9 +67,22 @@ export default function ArtistDetail() {
     const handleCollect = async () => {
         setCollecting(true);
         try {
-            await fetch(`${API}/api/artist/${artistId}/collect`, { method: "POST" });
-            // Wait for collection to finish, then refresh
-            setTimeout(() => { clearApiCache(); fetchDetail(); setCollecting(false); }, 8000);
+            const res = await fetch(`${API}/api/artist/${artistId}/collect`, { method: "POST" });
+            const body = await res.json();
+            if (!res.ok) { console.error("Collect failed:", body); setCollecting(false); return; }
+            // Poll for completion
+            const poll = setInterval(async () => {
+                try {
+                    const statusRes = await fetch(`${API}/api/artist/${artistId}/collect/status`).then(r => r.json());
+                    if (statusRes.status === "done" || statusRes.status === "error") {
+                        clearInterval(poll);
+                        clearApiCache();
+                        fetchDetail();
+                        setCollecting(false);
+                        if (statusRes.status === "error") console.error("Collection error:", statusRes.error);
+                    }
+                } catch (e) { console.error("Status poll error:", e); }
+            }, 3000);
         } catch (e) { console.error(e); setCollecting(false); }
     };
 

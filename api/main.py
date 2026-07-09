@@ -43,6 +43,9 @@ app.add_middleware(
 # Track background collector process
 _collector_state: dict[str, Any] = {"running": False, "started_at": None, "pid": None, "type": None}
 
+# Track per-artist collection status: {artist_id: {"status": "collecting"|"done"|"error", "songs": int, "error": str}}
+_collect_state: dict[str, dict[str, Any]] = {}
+
 # ─── Daily Scheduler (8 AM IST) ─────────────────────────────
 
 _scheduler_state: dict[str, Any] = {"next_run": None, "last_run": None, "active": False}
@@ -1541,6 +1544,8 @@ def collect_for_single_artist(artist_id: str):
     name = artist["name"]
     conn.close()
 
+    _collect_state[artist_id] = {"status": "collecting", "songs": 0, "error": None}
+
     def do_collect():
         try:
             from youtube_client import YouTubeClient
@@ -1573,9 +1578,9 @@ def collect_for_single_artist(artist_id: str):
                                 "thumbnail": yt._get_best_thumbnail(item.get("thumbnails", [])),
                                 "artists": ", ".join(artists_list),
                             })
-                    print(f"  [search-fallback] Found {len(songs)} songs for '{name}'")
+                    print(f"  [search-fallback] Found {len(songs)} songs for '{name}'", flush=True)
                 except Exception as e:
-                    print(f"  [search-fallback] Error for '{name}': {e}")
+                    print(f"  [search-fallback] Error for '{name}': {e}", flush=True)
 
             if songs:
                 # Get accurate stats from YouTube Data API
@@ -1611,16 +1616,30 @@ def collect_for_single_artist(artist_id: str):
                     """, (song_id, views, likes, comments, ytmusic_views))
 
                 c.commit()
-                print(f"[collect] Got {len(songs)} songs for '{name}' (API stats for {len(video_stats)})")
+                print(f"[collect] Got {len(songs)} songs for '{name}' (API stats for {len(video_stats)})", flush=True)
+            else:
+                print(f"[collect] No songs found for '{name}'", flush=True)
+
             c.close()
+            _collect_state[artist_id] = {"status": "done", "songs": len(songs), "error": None}
         except Exception as e:
-            print(f"[collect] Error for '{name}': {e}")
+            import traceback
+            err_msg = f"{e}\n{traceback.format_exc()}"
+            print(f"[collect] Error for '{name}': {err_msg}", flush=True)
+            _collect_state[artist_id] = {"status": "error", "songs": 0, "error": str(e)}
         finally:
             refresh_cache()
 
     thread = threading.Thread(target=do_collect, daemon=True)
     thread.start()
     return {"status": "collecting", "artist_id": artist_id, "name": name}
+
+
+@app.get("/api/artist/{artist_id}/collect/status")
+def collect_status(artist_id: str):
+    """Check the status of a per-artist collection."""
+    state = _collect_state.get(artist_id, {"status": "idle", "songs": 0, "error": None})
+    return state
 
 
 if __name__ == "__main__":
