@@ -312,8 +312,8 @@ export default function YouTubeDashboard() {
                 {/* whats hot */}
                 <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                        <span style={{ fontSize: "16px" }}>🏆</span><span style={{ fontWeight: 600, fontSize: "16px" }}>Viral Leaderboard</span>
-                        <span style={{ font: "500 10px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.35)", letterSpacing: ".5px", marginLeft: "2px" }}>SPIKE DETECTED · 24H</span>
+                        <span style={{ fontSize: "16px" }}>🏆</span><span style={{ fontWeight: 600, fontSize: "16px", marginLeft: "4px" }}>Song Leaderboard</span>
+                        <span style={{ fontSize: "12px", fontWeight: 400, color: "rgba(255,255,255,.4)", marginLeft: "6px" }}>({hot.length})</span>
                     </div>
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
                         {hot.length > 0 ? hot.map((h, idx) => (

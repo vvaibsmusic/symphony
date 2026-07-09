@@ -834,7 +834,10 @@ export default function SpotifyDashboard() {
       <div className="section">
         <div className="section-header">
           <h2 className="section-title">
-            <span className="icon">🏆</span> Viral Leaderboard
+            <span className="icon">🏆</span> Song Leaderboard
+            <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "var(--text-muted)", marginLeft: 8 }}>
+              ({viral.length})
+            </span>
           </h2>
         </div>
         {viral.length > 0 ? (

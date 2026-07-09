@@ -436,7 +436,7 @@ export default function YouTubeDashboard() {
 
             {/* Viral */}
             <div className="section">
-                <div className="section-header"><h2 className="section-title"><span className="icon">🏆</span> Viral Leaderboard</h2></div>
+                <div className="section-header"><h2 className="section-title"><span className="icon">🏆</span> Song Leaderboard<span style={{ fontSize: "0.8rem", fontWeight: 400, color: "var(--text-muted)", marginLeft: 8 }}>({viral.length})</span></h2></div>
                 {viral.length > 0 ? (
                     <div className="viral-grid">
                         {viral.map((v, idx) => (
