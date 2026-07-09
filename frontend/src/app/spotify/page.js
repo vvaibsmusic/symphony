@@ -147,6 +147,7 @@ export default function SpotifyDashboard() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState({ progress: 0, total: 0 });
   const [addUrl, setAddUrl] = useState("");
   const [addingArtist, setAddingArtist] = useState(false);
   const [addMsg, setAddMsg] = useState(null);
@@ -318,6 +319,7 @@ export default function SpotifyDashboard() {
 
   const handleRefresh = async (type) => {
     setRefreshing(type);
+    setRefreshProgress({ progress: 0, total: 0 });
     try {
       await fetch(`${API}/api/refresh/${type}`, { method: "POST" });
       const poll = setInterval(async () => {
@@ -325,6 +327,7 @@ export default function SpotifyDashboard() {
         if (!res.running) {
           clearInterval(poll);
           setRefreshing(false);
+          setRefreshProgress({ progress: 0, total: 0 });
           // Re-fetch dashboard data
           const [viralRes, releasesRes, statsRes] = await Promise.all([
             fetch(`${API}/api/spotify/viral?limit=12`).then((r) => r.json()),
@@ -334,8 +337,10 @@ export default function SpotifyDashboard() {
           setViral(viralRes.viral || []);
           setReleases(releasesRes.releases || []);
           setStats(statsRes || null);
+        } else {
+          setRefreshProgress({ progress: res.progress || 0, total: res.total || 0 });
         }
-      }, 5000);
+      }, 2000);
     } catch (e) {
       console.error(e);
       setRefreshing(false);
@@ -411,6 +416,9 @@ export default function SpotifyDashboard() {
     fontFamily: "Inter, sans-serif",
     outline: "none",
   };
+
+  const statsPct = refreshing === "spotify_stats" && refreshProgress.total > 0 ? (refreshProgress.progress / refreshProgress.total) * 100 : 0;
+  const discoverPct = refreshing === "spotify_discover" && refreshProgress.total > 0 ? (refreshProgress.progress / refreshProgress.total) * 100 : 0;
 
   return (
     <div className="page">
@@ -661,7 +669,9 @@ export default function SpotifyDashboard() {
                 padding: "8px 16px",
                 borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--sp-green)",
-                background: refreshing === "spotify_stats" ? "rgba(29,185,84,0.15)" : "rgba(29,185,84,0.1)",
+                background: refreshing === "spotify_stats" 
+                    ? (statsPct > 0 ? `linear-gradient(90deg, rgba(29,185,84,0.3) ${statsPct}%, rgba(29,185,84,0.15) ${statsPct}%)` : "rgba(29,185,84,0.15)") 
+                    : "rgba(29,185,84,0.1)",
                 color: "var(--sp-green)",
                 fontSize: "0.82rem",
                 fontWeight: 600,
@@ -670,12 +680,14 @@ export default function SpotifyDashboard() {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
+                position: "relative",
+                overflow: "hidden"
               }}
             >
               {refreshing === "spotify_stats" ? (
                 <>
                   <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, borderTopColor: "var(--sp-green)" }}></span>
-                  Updating stats...
+                  {statsPct > 0 ? `Updating stats... (${refreshProgress.progress}/${refreshProgress.total})` : "Updating stats..."}
                 </>
               ) : (
                 <>📊 Refresh Stats</>
@@ -688,7 +700,9 @@ export default function SpotifyDashboard() {
                 padding: "8px 16px",
                 borderRadius: "var(--radius-sm)",
                 border: "1px solid #a78bfa",
-                background: refreshing === "spotify_discover" ? "rgba(167,139,250,0.15)" : "rgba(167,139,250,0.1)",
+                background: refreshing === "spotify_discover" 
+                    ? (discoverPct > 0 ? `linear-gradient(90deg, rgba(167,139,250,0.3) ${discoverPct}%, rgba(167,139,250,0.15) ${discoverPct}%)` : "rgba(167,139,250,0.15)") 
+                    : "rgba(167,139,250,0.1)",
                 color: "#a78bfa",
                 fontSize: "0.82rem",
                 fontWeight: 600,
@@ -697,12 +711,14 @@ export default function SpotifyDashboard() {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
+                position: "relative",
+                overflow: "hidden"
               }}
             >
               {refreshing === "spotify_discover" ? (
                 <>
                   <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, borderTopColor: "#a78bfa" }}></span>
-                  Finding tracks...
+                  {discoverPct > 0 ? `Finding tracks... (${refreshProgress.progress}/${refreshProgress.total})` : "Finding tracks..."}
                 </>
               ) : (
                 <>🔍 Find New Tracks</>

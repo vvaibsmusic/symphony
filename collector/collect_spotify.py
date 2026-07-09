@@ -248,7 +248,7 @@ def collect_all_spotify_data(market: str = SPOTIFY_MARKET) -> Dict:
     total_songs = 0
     total_viral = 0
     for i, artist in enumerate(artists, start=1):
-        print(f"[{i}/{len(artists)}] {artist['name']}")
+        print(f"[{i}/{len(artists)}] {artist['name']}", flush=True)
         try:
             result = collect_tracks_for_artist(conn, client, artist, market=market)
             conn.commit()

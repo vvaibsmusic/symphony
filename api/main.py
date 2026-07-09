@@ -265,10 +265,35 @@ def trigger_refresh_spotify_discover():
 @app.get("/api/refresh/status")
 def refresh_status():
     """Check if a refresh is currently running."""
+    progress = 0
+    total = 0
+    message = ""
+    if _collector_state["running"]:
+        try:
+            with open("collector.log", "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                for line in reversed(lines):
+                    line = line.strip()
+                    if line.startswith("[") and "/" in line and "]" in line:
+                        try:
+                            parts = line.split("]", 1)[0].strip("[")
+                            cur, tot = parts.split("/")
+                            progress = int(cur)
+                            total = int(tot)
+                            message = line.split("]", 1)[1].strip()
+                            break
+                        except Exception:
+                            continue
+        except Exception:
+            pass
+
     return {
         "running": _collector_state["running"],
         "type": _collector_state.get("type"),
         "started_at": _collector_state.get("started_at"),
+        "progress": progress,
+        "total": total,
+        "message": message,
     }
 
 

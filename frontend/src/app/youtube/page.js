@@ -199,20 +199,25 @@ export default function YouTubeDashboard() {
         } catch (e) { console.error(e); }
     };
 
+    const [refreshProgress, setRefreshProgress] = useState({ progress: 0, total: 0 });
+
     const handleRefresh = async (type) => {
         setRefreshing(type);
+        setRefreshProgress({ progress: 0, total: 0 });
         try {
             await fetch(`${API}/api/refresh/${type}`, { method: "POST" });
             const poll = setInterval(async () => {
                 const res = await fetch(`${API}/api/refresh/status`).then(r => r.json());
                 if (!res.running) {
-                    clearInterval(poll); setRefreshing(false);
+                    clearInterval(poll); setRefreshing(false); setRefreshProgress({ progress: 0, total: 0 });
                     clearApiCache();
                     fetchData(); fetchArtists();
                     // Re-fetch quota after stats refresh
                     if (type === "stats") fetch(`${API}/api/quota`).then(r => r.json()).then(q => setQuota(q)).catch(() => { });
+                } else {
+                    setRefreshProgress({ progress: res.progress || 0, total: res.total || 0 });
                 }
-            }, 5000);
+            }, 2000);
         } catch (e) { console.error(e); setRefreshing(false); }
     };
 
@@ -266,6 +271,8 @@ export default function YouTubeDashboard() {
         color: "var(--text-primary)", fontSize: "0.85rem",
         fontFamily: "Inter, sans-serif", outline: "none",
     };
+    const statsPct = refreshing === "stats" && refreshProgress.total > 0 ? (refreshProgress.progress / refreshProgress.total) * 100 : 0;
+    const discoverPct = refreshing === "discover" && refreshProgress.total > 0 ? (refreshProgress.progress / refreshProgress.total) * 100 : 0;
 
     return (
         <div className="page">
@@ -373,21 +380,27 @@ export default function YouTubeDashboard() {
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
                         <button onClick={() => handleRefresh("stats")} disabled={refreshing} style={{
                             padding: "8px 16px", borderRadius: "var(--radius-sm)",
-                            border: "1px solid var(--yt-red)", background: refreshing === "stats" ? "rgba(255,0,0,0.15)" : "rgba(255,0,0,0.1)",
+                            border: "1px solid var(--yt-red)", 
+                            background: refreshing === "stats" 
+                                ? (statsPct > 0 ? `linear-gradient(90deg, rgba(255,0,0,0.3) ${statsPct}%, rgba(255,0,0,0.15) ${statsPct}%)` : "rgba(255,0,0,0.15)") 
+                                : "rgba(255,0,0,0.1)",
                             color: "var(--yt-red)", fontSize: "0.82rem", fontWeight: 600,
                             fontFamily: "Inter, sans-serif", cursor: refreshing ? "not-allowed" : "pointer",
-                            display: "flex", alignItems: "center", gap: 6,
+                            display: "flex", alignItems: "center", gap: 6, position: "relative", overflow: "hidden"
                         }}>
-                            {refreshing === "stats" ? (<><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }}></span> Updating stats...</>) : (<>📊 Refresh Stats</>)}
+                            {refreshing === "stats" ? (<><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }}></span> {statsPct > 0 ? `Updating stats... (${refreshProgress.progress}/${refreshProgress.total})` : "Updating stats..."}</>) : (<>📊 Refresh Stats</>)}
                         </button>
                         <button onClick={() => handleRefresh("discover")} disabled={refreshing} style={{
                             padding: "8px 16px", borderRadius: "var(--radius-sm)",
-                            border: "1px solid #4ade80", background: refreshing === "discover" ? "rgba(74,222,128,0.15)" : "rgba(74,222,128,0.1)",
+                            border: "1px solid #4ade80", 
+                            background: refreshing === "discover" 
+                                ? (discoverPct > 0 ? `linear-gradient(90deg, rgba(74,222,128,0.3) ${discoverPct}%, rgba(74,222,128,0.15) ${discoverPct}%)` : "rgba(74,222,128,0.15)") 
+                                : "rgba(74,222,128,0.1)",
                             color: "#4ade80", fontSize: "0.82rem", fontWeight: 600,
                             fontFamily: "Inter, sans-serif", cursor: refreshing ? "not-allowed" : "pointer",
-                            display: "flex", alignItems: "center", gap: 6,
+                            display: "flex", alignItems: "center", gap: 6, position: "relative", overflow: "hidden"
                         }}>
-                            {refreshing === "discover" ? (<><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }}></span> Finding songs...</>) : (<>🔍 Find New Songs</>)}
+                            {refreshing === "discover" ? (<><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }}></span> {discoverPct > 0 ? `Finding songs... (${refreshProgress.progress}/${refreshProgress.total})` : "Finding songs..."}</>) : (<>🔍 Find New Songs</>)}
                         </button>
                     </div>
 

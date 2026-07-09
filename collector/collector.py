@@ -55,7 +55,7 @@ def collect_youtube_data(fast_mode: bool = False):
         artist_name = artist["name"]
         channel_id = artist["youtube_channel_id"]
         is_watched = bool(artist["is_watched"])
-        print(f"\n[{i+1}/{len(artists)}] {artist_name} (Watched: {is_watched})")
+        print(f"\n[{i+1}/{len(artists)}] {artist_name} (Watched: {is_watched})", flush=True)
 
         try:
             # Step 1: Get songs based on watch status
