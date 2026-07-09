@@ -2,6 +2,32 @@
 
 Welcome, Claude Fable! This document serves as a complete Knowledge Transfer for the "Symphony" music intelligence dashboard. The user is transitioning the project to you to resolve ongoing bugs and stabilize the application.
 
+## Development Log
+
+### **Bug Fixes, UI Polish & API Fallbacks (July 09, 2026)**
+- Fixed Turso DB quota exceeded error by moving to a local SQLite database that bypasses quotas completely (`hf-symphony/api/db.py`, `.env`).
+- Implemented GitHub Actions Keep-Alive cron job to ping the dashboard and prevent 30s cold starts.
+- Reduced `logo.png` file size to 4.6KB and restored the missing navbar logo.
+- Overhauled "What's Hot?" section into a "🏆 Viral Leaderboard" with absolute positioned rank badges.
+- Debugged and fixed missing `googleapiclient` dependency in backend for adding artists.
+- Identified API issues with YouTube handle resolution; correctly bubbled up the official API errors to the user UI instead of silently falling back to scrapers.
+
+**Known Issues:**
+- The `YOUTUBE_API_KEY` on Hugging Face is either missing or invalid, causing "No YouTube channel found" errors.
+
+| File | Change |
+|------|--------|
+| `api/db.py` | Switched to standard local sqlite3 over libsql to bypass Turso quotas |
+| `.env` | Cleared Turso URL/token |
+| `.github/workflows/keep-alive.yml` | Created keep-alive cron job for HF space |
+| `frontend/public/logo_small.png` | Added optimized logo |
+| `frontend/src/app/youtube/client.js` | Updated What's Hot to Leaderboard UI |
+| `frontend/src/app/spotify/page.js` | Updated What's Hot to Leaderboard UI |
+| `api/requirements.txt` | Added `google-api-python-client` and `ytmusicapi` |
+| `api/main.py` | Added try/except to surface YouTube API errors correctly |
+| `collector/youtube_client.py` | Bubbled up ValueError on missing API keys |
+
+
 ## 1. Architecture Overview
 
 Symphony is a full-stack dashboard deployed on **Hugging Face Spaces (Docker)**. It tracks viral songs, new releases, and artist analytics across YouTube and Spotify.

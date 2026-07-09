@@ -45,5 +45,6 @@ frontend/.swc/
 *.swo
 *~
 youtube_enricher
-frontend/public/logo.png
+# frontend/public/logo.png  <- now committed as logo_small.png
 collector_go/youtube_enricher
+history.md
