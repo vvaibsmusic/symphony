@@ -315,23 +315,70 @@ export default function YouTubeDashboard() {
                         <span style={{ fontSize: "16px" }}>🏆</span><span style={{ fontWeight: 600, fontSize: "16px", marginLeft: "4px" }}>Song Leaderboard</span>
                         <span style={{ fontSize: "12px", fontWeight: 400, color: "rgba(255,255,255,.4)", marginLeft: "6px" }}>({hot.length})</span>
                     </div>
-                    <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
-                        {hot.length > 0 ? hot.map((h, idx) => (
-                            <Link href={`/artist/${h.id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                                <div style={{ width: "24px", textAlign: "center", fontWeight: 800, fontSize: "16px", color: idx < 3 ? "#FF5238" : "rgba(255,255,255,.4)", flex: "none" }}>
-                                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
-                                </div>
-                                <div style={{ width: "42px", height: "42px", borderRadius: "9px", background: h.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px", color: "rgba(255,255,255,.88)" }}>{h.ini}</div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h.title}</div>
-                                    <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.45)" }}>{h.artist}</div>
-                                </div>
-                                <svg width="70" height="24" viewBox="0 0 100 30" preserveAspectRatio="none" style={{ flex: "none" }}><polyline points={h.spark} fill="none" stroke="#FF5238" strokeWidth="3" strokeLinejoin="round"></polyline></svg>
-                                <div style={{ font: "600 11px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.5)", width: "108px", textAlign: "right", flex: "none" }}>{h.from} → {h.to}</div>
-                                <div style={{ background: "rgba(255,82,56,.14)", color: "#FF6A52", font: "700 12px ui-monospace,Menlo,monospace", padding: "5px 9px", borderRadius: "7px", flex: "none", width: "62px", textAlign: "center" }}>{h.mult}</div>
-                            </Link>
-                        )) : (
-                            <div style={{ padding: "16px", textAlign: "center", color: "rgba(255,255,255,.4)", fontSize: "13px" }}>No viral alerts right now.</div>
+                    <div style={{ maxHeight: "350px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "auto" }}>
+                        {hot.length > 0 ? (
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Inter, sans-serif" }}>
+                                <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
+                                    <tr>
+                                        {["#", "Track", "Spike", "Pop"].map((h, i) => (
+                                            <th
+                                                key={i}
+                                                style={{
+                                                    padding: "10px 12px",
+                                                    textAlign: (h === "#" || h === "Track") ? "left" : "right",
+                                                    fontWeight: 600,
+                                                    color: "var(--text-muted)",
+                                                    fontSize: "0.75rem",
+                                                    textTransform: "uppercase",
+                                                    letterSpacing: "0.04em",
+                                                    borderBottom: "1px solid var(--border-subtle)",
+                                                    background: "var(--bg-secondary)",
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {hot.map((h, idx) => {
+                                        const rank = idx + 1;
+                                        return (
+                                            <tr 
+                                                key={idx} 
+                                                style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s ease", cursor: "pointer" }} 
+                                                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"} 
+                                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                                onClick={() => window.location.href = `/artist/${h.id}`}
+                                            >
+                                                <td style={{ padding: "10px 12px", fontWeight: 700, width: 40, color: rank <= 3 ? "var(--yt-red)" : "var(--text-muted)", fontSize: rank <= 3 ? "1rem" : "0.85rem" }}>
+                                                    {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : rank}
+                                                </td>
+                                                <td style={{ padding: "10px 12px" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                        <div style={{ width: 32, height: 32, borderRadius: 6, background: h.grad, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "12px", color: "rgba(255,255,255,.88)" }}>{h.ini}</div>
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div style={{ fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }}>{h.title}</div>
+                                                            <div style={{ fontSize: "11px", color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }}>{h.artist}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                                    <span style={{ background: "rgba(255, 0, 0, 0.15)", color: "var(--yt-red)", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
+                                                        🔥 {h.mult}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                                                    {h.from} <span style={{ color: "var(--text-muted)", margin: "0 2px" }}>→</span> {h.to}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div style={{ padding: "16px", textAlign: "center", color: "var(--text-muted)", fontSize: "13px" }}>No viral alerts right now.</div>
                         )}
                     </div>
                 </div>

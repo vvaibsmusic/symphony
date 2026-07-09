@@ -841,44 +841,72 @@ export default function SpotifyDashboard() {
           </h2>
         </div>
         {viral.length > 0 ? (
-          <div className="viral-grid">
-            {viral.map((v, idx) => (
-              <Link href={`/spotify/artist/${v.artist_id}`} key={v.alert_id}>
-                <div className="viral-card">
-                  <div style={{ position: "absolute", top: -8, left: -8, background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "13px", zIndex: 10, color: idx < 3 ? "var(--text-primary)" : "var(--text-muted)", boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }}>
-                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
-                  </div>
-                  {v.thumbnail_url ? (
-                    <img src={v.thumbnail_url} alt={v.title} className="viral-thumbnail" />
-                  ) : (
-                    <div
-                      className="viral-thumbnail"
+          <div style={{ maxHeight: "450px", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "auto", background: "var(--bg-card)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Inter, sans-serif" }}>
+              <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
+                <tr>
+                  {["#", "Track", "Artist", "Spike", "Previous", "Current", ""].map((h, i) => (
+                    <th
+                      key={i}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "1.5rem",
+                        padding: "10px 12px",
+                        textAlign: (h === "#" || h === "Track" || h === "Artist") ? "left" : "right",
+                        fontWeight: 600,
                         color: "var(--text-muted)",
+                        fontSize: "0.75rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        borderBottom: "1px solid var(--border-subtle)",
+                        background: "var(--bg-secondary)",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      🎵
-                    </div>
-                  )}
-                  <div className="viral-info">
-                    <div className="viral-title">{v.title}</div>
-                    <div className="viral-artist">{v.artist_name}</div>
-                    <div className="viral-stats">
-                      <span className="viral-badge">
-                        +{v.popularity_delta ?? (v.current_count || 0) - (v.previous_count || 0)}
-                      </span>
-                      <span className="viral-views">
-                        {formatNumber(v.previous_count)} → {formatNumber(v.current_count)} popularity
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {viral.map((v, idx) => {
+                  const rank = idx + 1;
+                  const delta = v.popularity_delta ?? (v.current_count || 0) - (v.previous_count || 0);
+                  return (
+                    <tr 
+                      key={v.alert_id} 
+                      style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s ease", cursor: "pointer" }} 
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"} 
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      onClick={() => window.location.href = `/spotify/artist/${v.artist_id}`}
+                    >
+                      <td style={{ padding: "10px 12px", fontWeight: 700, width: 40, color: rank <= 3 ? "var(--sp-green)" : "var(--text-muted)", fontSize: rank <= 3 ? "1rem" : "0.85rem" }}>
+                        {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : rank}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {v.thumbnail_url ? (
+                            <img src={v.thumbnail_url} alt={v.title} style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} />
+                          ) : (
+                            <div style={{ width: 36, height: 36, borderRadius: 6, background: "var(--bg-secondary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem" }}>🎵</div>
+                          )}
+                          <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{v.title}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>{v.artist_name}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                        <span style={{ background: "rgba(29, 185, 84, 0.15)", color: "var(--sp-green)", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem" }}>
+                          +{formatNumber(delta)}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>{formatNumber(v.previous_count)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>{formatNumber(v.current_count)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>›</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className="empty-state">
