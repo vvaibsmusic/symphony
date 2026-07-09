@@ -25,9 +25,3 @@ jobs:
           echo "Triggering YouTube Stats..."
           curl -X POST -sSf "${HF_SPACE_URL}/api/refresh/stats"
 
-      - name: Trigger Spotify Stats
-        env:
-          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL || 'https://vvaibsmusic-symphony.hf.space' }}
-        run: |
-          echo "Triggering Spotify Stats..."
-          curl -X POST -sSf "${HF_SPACE_URL}/api/refresh/spotify/stats"
