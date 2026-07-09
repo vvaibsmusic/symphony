@@ -13,7 +13,7 @@ export default function NavBar() {
       <div className="nav-inner">
         <Link href="/" className="nav-logo" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img
-            src="/logo.png"
+            src="/logo_small.png"
             alt="vvaibsmusic"
             style={{ width: 30, height: 30, borderRadius: 6, objectFit: "cover" }}
           />
