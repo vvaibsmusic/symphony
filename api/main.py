@@ -330,9 +330,12 @@ def _add_from_youtube_handle(handle: str, genre: str, region: str):
         raise HTTPException(status_code=500, detail=f"YouTube client unavailable: {e}")
 
     yt = YouTubeClient()
-    info = yt.resolve_channel_by_handle(handle)
-    if not info:
-        raise HTTPException(status_code=404, detail=f"No YouTube channel found for @{handle}")
+    try:
+        info = yt.resolve_channel_by_handle(handle)
+        if not info:
+            raise HTTPException(status_code=404, detail=f"No YouTube channel found for @{handle}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     name = info["name"]
     channel_id = info.get("channel_id")

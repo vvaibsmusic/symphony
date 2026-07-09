@@ -49,92 +49,52 @@ class YouTubeClient:
             print("[YouTube] ytmusicapi not installed")
 
     def resolve_channel_by_handle(self, handle: str) -> Optional[Dict[str, Any]]:
-        """Resolve a YouTube @handle to channel info using Data API v3 or fallback to scraping.
+        """Resolve a YouTube @handle to channel info using Data API v3.
 
         Args:
             handle: YouTube handle without '@' prefix (e.g. 'agsyworld')
 
         Returns:
             dict with channel_id, name, thumbnail, subscriber_count, description
-            or None if not found.
+            or None if not found / API unavailable.
         """
+        if not self.youtube:
+            raise ValueError("YouTube Data API v3 not initialized. Please ensure YOUTUBE_API_KEY is set in your environment variables.")
+
         handle = handle.lstrip("@")
-        
-        # 1. Try Official API first
-        if self.youtube:
-            try:
-                yt_api = cast(Any, self.youtube)
-                response = yt_api.channels().list(
-                    forHandle=handle,
-                    part="snippet,statistics",
-                    maxResults=1,
-                ).execute()
 
-                items = response.get("items", [])
-                if items:
-                    ch = items[0]
-                    snippet = ch.get("snippet", {})
-                    stats = ch.get("statistics", {})
-                    thumbnails = snippet.get("thumbnails", {})
-                    thumb = (
-                        thumbnails.get("high", {}).get("url")
-                        or thumbnails.get("medium", {}).get("url")
-                        or thumbnails.get("default", {}).get("url")
-                    )
-
-                    return {
-                        "channel_id": ch.get("id"),
-                        "name": snippet.get("title", ""),
-                        "thumbnail": thumb,
-                        "subscriber_count": int(stats.get("subscriberCount", 0)),
-                        "description": snippet.get("description", ""),
-                    }
-            except Exception as e:
-                print(f"[YouTube] API error resolving handle @{handle}: {e}")
-
-        # 2. Fallback to Web Scraping (No API Key Required)
-        print(f"[YouTube] Falling back to web scrape for @{handle}...")
         try:
-            import requests
-            import re
-            
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            yt_api = cast(Any, self.youtube)
+            response = yt_api.channels().list(
+                forHandle=handle,
+                part="snippet,statistics",
+                maxResults=1,
+            ).execute()
+
+            items = response.get("items", [])
+            if not items:
+                return None
+
+            ch = items[0]
+            snippet = ch.get("snippet", {})
+            stats = ch.get("statistics", {})
+            thumbnails = snippet.get("thumbnails", {})
+            thumb = (
+                thumbnails.get("high", {}).get("url")
+                or thumbnails.get("medium", {}).get("url")
+                or thumbnails.get("default", {}).get("url")
+            )
+
+            return {
+                "channel_id": ch.get("id"),
+                "name": snippet.get("title", ""),
+                "thumbnail": thumb,
+                "subscriber_count": int(stats.get("subscriberCount", 0)),
+                "description": snippet.get("description", ""),
             }
-            url = f"https://www.youtube.com/@{handle}"
-            html = requests.get(url, headers=headers, timeout=10).text
-
-            # Extract Channel ID
-            channel_id_match = re.search(r'itemprop="channelId" content="(UC[A-Za-z0-9_-]+)"', html)
-            if not channel_id_match:
-                channel_id_match = re.search(r'canonical" href="https://www.youtube.com/channel/(UC[A-Za-z0-9_-]+)"', html)
-            if not channel_id_match:
-                channel_id_match = re.search(r'"externalId":"(UC[A-Za-z0-9_-]+)"', html)
-                
-            # Extract Name
-            name_match = re.search(r'"title":"([^"]+)","avatar"', html)
-            if not name_match:
-                name_match = re.search(r'<title>(.*?) - YouTube</title>', html)
-                
-            # Extract Thumbnail
-            thumb_match = re.search(r'avatar":{"thumbnails":\[.*?{"url":"([^"]+)"', html)
-
-            channel_id = channel_id_match.group(1) if channel_id_match else None
-            name = name_match.group(1) if name_match else handle
-            thumb = thumb_match.group(1) if thumb_match else ""
-
-            if channel_id:
-                return {
-                    "channel_id": channel_id,
-                    "name": name,
-                    "thumbnail": thumb,
-                    "subscriber_count": 0,
-                    "description": "",
-                }
         except Exception as e:
-            print(f"[YouTube] Scrape fallback error for @{handle}: {e}")
-
-        return None
+            # Raise the exception so the API endpoint can catch it and display the real Google error
+            raise ValueError(f"Official YouTube API Error: {e}")
 
     def get_artist_songs_ytmusic(self, channel_id: str, artist_name: str, fast_mode: bool = False) -> List[Dict[str, Any]]:
         """Get artist's songs via ytmusicapi. Returns list of song dicts.
