@@ -5,7 +5,7 @@ import os
 import time
 import hashlib
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 # Setup paths so we can import from the collector module
 project_dir = os.path.dirname(os.path.dirname(__file__))
@@ -65,6 +65,35 @@ def collect_youtube_data(fast_mode: bool = False):
             else:
                 print(f"  [ytmusicapi] Fetching songs via unofficial library")
                 songs = yt.get_artist_songs_ytmusic(channel_id, artist_name, fast_mode=fast_mode)
+
+            if not songs:
+                # ytmusicapi may be SSL-blocked on some servers (e.g. HF Spaces).
+                # Fall back to YouTube Data API: find channel → list videos.
+                if yt.youtube and not channel_id:
+                    try:
+                        yt_api = cast(Any, yt.youtube)
+                        chan_search = yt_api.search().list(
+                            q=artist_name, part="id,snippet", type="channel", maxResults=1
+                        ).execute()
+                        chan_items = chan_search.get("items", [])
+                        if chan_items:
+                            channel_id = chan_items[0].get("id", {}).get("channelId")
+                            if channel_id:
+                                conn.execute(
+                                    "UPDATE artists SET youtube_channel_id = ? WHERE id = ?",
+                                    (channel_id, artist["id"]),
+                                )
+                                conn.commit()
+                                print(f"  [Data API] Found channel {channel_id}, saved to DB")
+                    except Exception as e:
+                        print(f"  [Data API] Channel search error: {e}")
+
+                if yt.youtube and channel_id:
+                    try:
+                        songs = yt.get_channel_videos(channel_id, max_results=50)
+                        print(f"  [Data API] Fetched {len(songs)} videos via channel search")
+                    except Exception as e:
+                        print(f"  [Data API] Channel videos error: {e}")
 
             if not songs:
                 print(f"  No songs found, skipping")
