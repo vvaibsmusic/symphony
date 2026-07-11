@@ -9,19 +9,62 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
+      - name: Wake up HF Space
+        run: |
+          echo "Waking up HF Space..."
+          for i in 1 2 3 4 5 6; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://vvaibsmusic-symphony.hf.space/api/stats")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Space is awake"
+              break
+            fi
+            echo "Waiting 30s for space to wake up..."
+            sleep 30
+          done
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Space did not wake up after 6 attempts"
+            exit 1
+          fi
+
       - name: Trigger YouTube Discover
-        env:
-          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL || 'https://vvaibsmusic-symphony.hf.space' }}
         run: |
           echo "Triggering YouTube Discover..."
-          curl -X POST -sSf "${HF_SPACE_URL}/api/refresh/discover"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://vvaibsmusic-symphony.hf.space/api/refresh/discover")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE: $BODY"
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "❌ Discover trigger failed"
+            exit 1
+          fi
+
+      - name: Wait for Discover to finish
+        run: |
+          echo "Waiting for discover to complete..."
+          for i in $(seq 1 40); do
+            sleep 15
+            STATUS=$(curl -s "https://vvaibsmusic-symphony.hf.space/api/refresh/status")
+            RUNNING=$(echo "$STATUS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('running', False))" 2>/dev/null || echo "unknown")
+            echo "Check $i: running=$RUNNING"
+            if [ "$RUNNING" = "False" ]; then
+              echo "✅ Discover finished"
+              break
+            fi
+          done
 
       - name: Trigger YouTube Stats
-        env:
-          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL || 'https://vvaibsmusic-symphony.hf.space' }}
         run: |
           echo "Triggering YouTube Stats..."
-          curl -X POST -sSf "${HF_SPACE_URL}/api/refresh/stats"
-
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://vvaibsmusic-symphony.hf.space/api/refresh/stats")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE: $BODY"
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "❌ Stats trigger failed"
+            exit 1
+          fi
+          echo "✅ Stats collection started"
