@@ -1515,86 +1515,52 @@ def collect_for_single_artist(artist_id: str):
             yt = YouTubeClient()
             _log(f"YouTubeClient init: yt_api={'yes' if yt.youtube else 'no'}, ytmusic={'yes' if yt.ytmusic else 'no'}")
 
-            # Try ytmusicapi first for song discovery
-            songs = yt.get_artist_songs_ytmusic(None, name)
-            _log(f"get_artist_songs_ytmusic returned {len(songs) if songs else 0} songs")
-
-            # If ytmusicapi returns 0, try search-based approach
-            if not songs and yt.ytmusic:
-                songs = []
-                try:
-                    search = yt.ytmusic.search(name, filter="songs", limit=30)
-                    _log(f"ytmusic.search returned {len(search)} results")
-                    for item in search:
-                        vid = item.get("videoId")
-                        if not vid:
-                            continue
-                        title = item.get("title", "Unknown")
-                        artists_list = [a.get("name", "") for a in item.get("artists", [])]
-                        if name.lower() in " ".join(artists_list).lower():
-                            album = item.get("album", {})
-                            songs.append({
-                                "title": title,
-                                "video_id": vid,
-                                "album": album.get("name") if album else None,
-                                "views": 0,
-                                "thumbnail": yt._get_best_thumbnail(item.get("thumbnails", [])),
-                                "artists": ", ".join(artists_list),
-                            })
-                    _log(f"Search fallback matched {len(songs)} songs for '{name}'")
-                except Exception as e:
-                    _log(f"Search fallback error: {e}")
-
-            if not songs:
-                # Last resort: use YouTube Data API channel search
-                if yt.youtube:
+            songs = []
+            channel_id = None
+            
+            # Step 1: Default to official YouTube Data API
+            if yt.youtube:
+                artist_row = c.execute("SELECT youtube_channel_id FROM artists WHERE id = ?", (artist_id,)).fetchone()
+                if artist_row:
+                    channel_id = artist_row["youtube_channel_id"]
+                    
+                if not channel_id:
+                    _log(f"No channel ID in DB, searching YouTube Data API for '{name}'")
                     try:
                         from googleapiclient.discovery import Resource
                         from typing import cast, Any as _Any
                         yt_api = cast(_Any, yt.youtube)
-                        channel_id = None
-                        # Look up channel_id from DB
-                        artist_row = c.execute("SELECT youtube_channel_id FROM artists WHERE id = ?", (artist_id,)).fetchone()
-                        if artist_row:
-                            channel_id = artist_row["youtube_channel_id"]
-                            
-                        if not channel_id:
-                            _log(f"No channel ID in DB, searching YouTube Data API for '{name}'")
-                            chan_search = yt_api.search().list(q=name, part="id,snippet", type="channel", maxResults=1).execute()
-                            chan_items = chan_search.get("items", [])
-                            if chan_items:
-                                channel_id = chan_items[0].get("id", {}).get("channelId")
-                                if channel_id:
-                                    _log(f"Found channel ID {channel_id}, saving to DB")
-                                    c.execute("UPDATE artists SET youtube_channel_id = ? WHERE id = ?", (channel_id, artist_id))
-                                    c.commit()
-
-                        if channel_id:
-                            _log(f"Trying YouTube Data API search for channel {channel_id}")
-                            search_resp = yt_api.search().list(
-                                channelId=channel_id,
-                                part="snippet",
-                                type="video",
-                                order="viewCount",
-                                maxResults=50,
-                            ).execute()
-                            items = search_resp.get("items", [])
-                            _log(f"YouTube Data API returned {len(items)} videos")
-                            songs = []
-                            for item in items:
-                                vid = item.get("id", {}).get("videoId")
-                                if not vid:
-                                    continue
-                                snippet = item.get("snippet", {})
-                                songs.append({
-                                    "title": snippet.get("title", "Unknown"),
-                                    "video_id": vid,
-                                    "album": None,
-                                    "views": 0,
-                                    "thumbnail": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
-                                })
+                        chan_search = yt_api.search().list(
+                            q=name, part="id,snippet", type="channel", maxResults=1
+                        ).execute()
+                        chan_items = chan_search.get("items", [])
+                        if chan_items:
+                            channel_id = chan_items[0].get("id", {}).get("channelId")
+                            if channel_id:
+                                _log(f"Found channel ID {channel_id}, saving to DB")
+                                c.execute("UPDATE artists SET youtube_channel_id = ? WHERE id = ?", (channel_id, artist_id))
+                                c.commit()
                     except Exception as e:
-                        _log(f"YouTube Data API fallback error: {e}")
+                        _log(f"Data API Channel search error: {e}")
+
+                if channel_id:
+                    _log(f"Trying YouTube Data API search for channel {channel_id}")
+                    try:
+                        songs = yt.get_channel_videos(channel_id, max_results=50)
+                        if songs:
+                            _log(f"Data API Fetched {len(songs)} videos via channel search")
+                    except Exception as e:
+                        _log(f"Data API Channel videos error: {e}")
+
+            # Step 2: Fallback to ytmusicapi
+            if not songs:
+                _log("Falling back to ytmusicapi")
+                try:
+                    songs = yt.get_artist_songs_ytmusic(channel_id, name)
+                    if songs:
+                        _log(f"get_artist_songs_ytmusic returned {len(songs)} songs")
+                except Exception as e:
+                    _log(f"ytmusicapi Error: {e}")
 
             if songs:
                 # Get accurate stats from YouTube Data API

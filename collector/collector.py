@@ -58,18 +58,11 @@ def collect_youtube_data(fast_mode: bool = False):
         print(f"\n[{i+1}/{len(artists)}] {artist_name} (Watched: {is_watched})", flush=True)
 
         try:
-            # Step 1: Get songs based on watch status
-            if is_watched:
-                print(f"  [Search API] Fetching channel videos for watched artist")
-                songs = yt.get_channel_videos(channel_id, max_results=50)
-            else:
-                print(f"  [ytmusicapi] Fetching songs via unofficial library")
-                songs = yt.get_artist_songs_ytmusic(channel_id, artist_name, fast_mode=fast_mode)
-
-            if not songs:
-                # ytmusicapi may be SSL-blocked on some servers (e.g. HF Spaces).
-                # Fall back to YouTube Data API: find channel → list videos.
-                if yt.youtube and not channel_id:
+            songs = []
+            
+            # Step 1: Default to official YouTube Data API
+            if yt.youtube:
+                if not channel_id:
                     try:
                         yt_api = cast(Any, yt.youtube)
                         chan_search = yt_api.search().list(
@@ -88,12 +81,23 @@ def collect_youtube_data(fast_mode: bool = False):
                     except Exception as e:
                         print(f"  [Data API] Channel search error: {e}")
 
-                if yt.youtube and channel_id:
+                if channel_id:
                     try:
                         songs = yt.get_channel_videos(channel_id, max_results=50)
-                        print(f"  [Data API] Fetched {len(songs)} videos via channel search")
+                        if songs:
+                            print(f"  [Data API] Fetched {len(songs)} videos via channel search")
                     except Exception as e:
                         print(f"  [Data API] Channel videos error: {e}")
+
+            # Step 2: Fallback to ytmusicapi
+            if not songs:
+                print(f"  [ytmusicapi] Falling back to unofficial library")
+                try:
+                    songs = yt.get_artist_songs_ytmusic(channel_id, artist_name, fast_mode=fast_mode)
+                    if songs:
+                        print(f"  [ytmusicapi] Fetched {len(songs)} songs")
+                except Exception as e:
+                    print(f"  [ytmusicapi] Error: {e}")
 
             if not songs:
                 print(f"  No songs found, skipping")
