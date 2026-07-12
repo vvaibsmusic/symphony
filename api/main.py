@@ -711,7 +711,7 @@ def collect_spotify_single_artist(artist_id: str):
 
 @app.get("/api/youtube/viral")
 @ttl_cache(600)
-def get_youtube_viral(limit: int = Query(20, ge=1, le=100)):
+def get_youtube_viral(limit: int = Query(100, ge=1, le=1000)):
     """Get songs that are going viral on YouTube (biggest view count spikes)."""
     conn = get_connection()
     rows = conn.execute("""

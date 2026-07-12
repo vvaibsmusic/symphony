@@ -37,6 +37,7 @@ class YouTubeClient:
             or os.getenv("YOUTUBE_API_KEY_2")
             or os.getenv("YOUTUBE_API_KEY_3")
             or os.getenv("YOUTUBE_API_KEY_4")
+            or os.getenv("YOUTUBE_API_KEY_5")
         )
         self.youtube: Optional[googleapiclient.discovery.Resource] = None
         self.ytmusic: Optional[YTMusic] = None
@@ -273,25 +274,40 @@ class YouTubeClient:
             return []
 
         try:
-            # Search for videos by the channel
             yt_api = cast(Any, self.youtube)
-            response = yt_api.search().list(
-                part="id,snippet",
-                channelId=channel_id,
-                type="video",
-                order="date",
-                maxResults=min(max_results, 50),
-                videoCategoryId="10"  # Music category
+            
+            # Step 1: Get the 'uploads' playlist ID for the channel
+            channel_response = yt_api.channels().list(
+                part="contentDetails",
+                id=channel_id
+            ).execute()
+            
+            items = channel_response.get("items", [])
+            if not items:
+                return []
+                
+            uploads_playlist_id = items[0].get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
+            if not uploads_playlist_id:
+                return []
+
+            # Step 2: Fetch videos from the 'uploads' playlist
+            playlist_response = yt_api.playlistItems().list(
+                part="snippet",
+                playlistId=uploads_playlist_id,
+                maxResults=min(max_results, 50)
             ).execute()
 
             videos = []
-            for item in response.get("items", []):
-                videos.append({
-                    "video_id": item["id"]["videoId"],
-                    "title": item["snippet"]["title"],
-                    "published_at": item["snippet"]["publishedAt"],
-                    "thumbnail": item["snippet"]["thumbnails"].get("high", {}).get("url", ""),
-                })
+            for item in playlist_response.get("items", []):
+                snippet = item.get("snippet", {})
+                resource_id = snippet.get("resourceId", {})
+                if resource_id.get("kind") == "youtube#video":
+                    videos.append({
+                        "video_id": resource_id.get("videoId"),
+                        "title": snippet.get("title"),
+                        "published_at": snippet.get("publishedAt"),
+                        "thumbnail": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
+                    })
 
             return videos
         except Exception as e:

@@ -63,6 +63,11 @@ export default function YouTubeDashboard() {
     const [favOnly, setFavOnly] = useState(false);
     const [favs, setFavs] = useState({});
     
+    // Song leaderboard state
+    const [songSearch, setSongSearch] = useState("");
+    const [songSortBy, setSongSortBy] = useState("spike");
+    const [songSortDir, setSongSortDir] = useState("desc");
+    
     // pagination state (keeping for api compatibility, though new design looks single-page)
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -102,11 +107,14 @@ export default function YouTubeDashboard() {
 
     const fetchData = useCallback(async () => {
         try {
-            const res = await fetch(`${API}/api/dashboard`).then(r => r.json());
-            setStats(res.stats || null);
-            setViral(res.viral?.viral || []);
-            setReleases([...(res.releases?.watched || []), ...(res.releases?.other || [])]);
-            setQuota(res.quota || null);
+            const statsRes = await fetch(`${API}/api/stats`).then(r => r.json()).catch(() => null);
+            setStats(statsRes || null);
+            const viralRes = await fetch(`${API}/api/youtube/viral?limit=100`).then(r => r.json()).catch(() => ({ viral: [] }));
+            setViral(viralRes.viral || []);
+            const releasesRes = await fetch(`${API}/api/watchlist/releases`).then(r => r.json()).catch(() => ({ watched: [], other: [] }));
+            setReleases([...(releasesRes.watched || []), ...(releasesRes.other || [])]);
+            const quotaRes = await fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null);
+            setQuota(quotaRes || null);
         } catch (e) {
             console.error("Failed to fetch dashboard stats:", e);
         }
@@ -155,7 +163,33 @@ export default function YouTubeDashboard() {
         { label: 'TOTAL ARTISTS', val: formatNumber(stats?.total_artists || 0), delta: '+4 wk', color: '#E9E9F2', spark: sp([60,62,61,66,68,70,72,78]) },
     ];
 
-    const hot = (viral || []).slice(0, 5).map(v => ({
+    let filteredSongs = viral || [];
+    if (songSearch) {
+        filteredSongs = filteredSongs.filter(v => 
+            (v.title || "").toLowerCase().includes(songSearch.toLowerCase()) || 
+            (v.artist_name || "").toLowerCase().includes(songSearch.toLowerCase())
+        );
+    }
+    if (favOnly) {
+        filteredSongs = filteredSongs.filter(v => favs[v.artist_id]);
+    }
+
+    filteredSongs = [...filteredSongs].sort((a, b) => {
+        let valA, valB;
+        if (songSortBy === 'spike') {
+            valA = a.growth_factor || 0;
+            valB = b.growth_factor || 0;
+        } else if (songSortBy === 'prev') {
+            valA = a.previous_count || 0;
+            valB = b.previous_count || 0;
+        } else if (songSortBy === 'curr') {
+            valA = a.current_count || 0;
+            valB = b.current_count || 0;
+        }
+        return songSortDir === 'desc' ? valB - valA : valA - valB;
+    });
+
+    const hot = filteredSongs.slice(0, 100).map(v => ({
         id: v.artist_id,
         title: (v.title || "").split(' (')[0],
         artist: v.artist_name,
@@ -311,9 +345,33 @@ export default function YouTubeDashboard() {
 
                 {/* whats hot */}
                 <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                        <span style={{ fontSize: "16px" }}>🏆</span><span style={{ fontWeight: 600, fontSize: "16px", marginLeft: "4px" }}>Song Leaderboard</span>
-                        <span style={{ fontSize: "12px", fontWeight: 400, color: "rgba(255,255,255,.4)", marginLeft: "6px" }}>({hot.length})</span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "16px" }}>🏆</span><span style={{ fontWeight: 600, fontSize: "16px", marginLeft: "4px" }}>Song Leaderboard</span>
+                            <span style={{ fontSize: "12px", fontWeight: 400, color: "rgba(255,255,255,.4)", marginLeft: "6px" }}>({hot.length})</span>
+                        </div>
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <input 
+                                value={songSearch} 
+                                onChange={e => setSongSearch(e.target.value)}
+                                placeholder="Search..."
+                                style={{ background: "rgba(255,255,255,.05)", border: "none", outline: "none", color: "#E9E9F2", fontSize: "12px", padding: "4px 8px", borderRadius: "4px", width: "90px" }}
+                            />
+                            {[{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}].map(s => (
+                                <button key={s.k} onClick={() => {
+                                    if (songSortBy === s.k) setSongSortDir(d => d === 'desc' ? 'asc' : 'desc');
+                                    else { setSongSortBy(s.k); setSongSortDir('desc'); }
+                                }} style={{ 
+                                    background: songSortBy === s.k ? "rgba(229,9,20,.12)" : "transparent", 
+                                    color: songSortBy === s.k ? "#FF6A52" : "rgba(255,255,255,.4)", 
+                                    border: "1px solid " + (songSortBy === s.k ? "rgba(229,9,20,.5)" : "rgba(255,255,255,.1)"), 
+                                    padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer",
+                                    transition: "all 0.2s"
+                                }}>
+                                    {s.l}{songSortBy === s.k ? (songSortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <div style={{ maxHeight: "350px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "auto" }}>
                         {hot.length > 0 ? (
