@@ -25,7 +25,7 @@ export default function NavBar() {
       <div style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(8,8,14,.82)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
         <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "14px 28px", display: "flex", alignItems: "center", gap: "20px" }}>
           <Link href="/youtube" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", textDecoration: "none", color: "inherit" }}>
-            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "linear-gradient(135deg,#FF3B30,#9b1d16)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" }}>▶</div>
+            <img src="/logo_small.png" alt="Symphony Logo" style={{ width: "28px", height: "28px", borderRadius: "6px", objectFit: "cover", flex: "none" }} />
             <span style={{ fontWeight: 700, fontSize: "19px", letterSpacing: "-.5px" }}>symphony</span>
           </Link>
           <div style={{ display: "flex", gap: "6px", background: "#14141F", padding: "4px", borderRadius: "11px", border: "1px solid rgba(255,255,255,.06)" }}>

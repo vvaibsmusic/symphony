@@ -198,6 +198,7 @@ export default function YouTubeDashboard() {
         to: formatNumber(v.current_count),
         ini: getInitials(v.artist_name),
         grad: getGrad(v.artist_id),
+        img: v.artist_image || v.thumbnail_url,
         spark: generateSparkline(1),
     }));
 
@@ -208,6 +209,7 @@ export default function YouTubeDashboard() {
         date: formatDate(r.release_date),
         ini: getInitials(r.artist_name),
         grad: getGrad(r.artist_id),
+        img: r.artist_image || r.thumbnail_url,
     }));
 
     let filteredArtists = artists;
@@ -232,6 +234,7 @@ export default function YouTubeDashboard() {
             medal,
             ini: getInitials(a.name),
             grad: getGrad(a.id),
+            img: a.image_url,
             spark: generateSparkline(trend),
             trendColor: trend >= 0 ? '#5BE08A' : '#FF6A52',
             heart: isFav ? '♥' : '♡',
@@ -415,7 +418,11 @@ export default function YouTubeDashboard() {
                                                 </td>
                                                 <td style={{ padding: "10px 12px" }}>
                                                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                        <div style={{ width: 32, height: 32, borderRadius: 6, background: h.grad, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "12px", color: "rgba(255,255,255,.88)" }}>{h.ini}</div>
+                                                        {h.img ? (
+                                                            <img src={h.img} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", flex: "none" }} />
+                                                        ) : (
+                                                            <div style={{ width: 32, height: 32, borderRadius: 6, background: h.grad, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "12px", color: "rgba(255,255,255,.88)", flex: "none" }}>{h.ini}</div>
+                                                        )}
                                                         <div style={{ minWidth: 0 }}>
                                                             <div style={{ fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }}>{h.title}</div>
                                                             <div style={{ fontSize: "11px", color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }}>{h.artist}</div>
@@ -450,7 +457,11 @@ export default function YouTubeDashboard() {
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
                         {fresh.length > 0 ? fresh.map((n, idx) => (
                             <Link href={`/artist/${n.id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                                <div style={{ width: "42px", height: "42px", borderRadius: "9px", background: n.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px", color: "rgba(255,255,255,.88)" }}>{n.ini}</div>
+                                {n.img ? (
+                                    <img src={n.img} alt="" style={{ width: 42, height: 42, borderRadius: 9, objectFit: "cover", flex: "none" }} />
+                                ) : (
+                                    <div style={{ width: "42px", height: "42px", borderRadius: "9px", background: n.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "14px", color: "rgba(255,255,255,.88)" }}>{n.ini}</div>
+                                )}
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.title}</div>
                                     <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.45)" }}>{n.artist} · {n.date}</div>
@@ -505,15 +516,19 @@ export default function YouTubeDashboard() {
             </div>
 
             {/* table */}
-            <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", padding: "11px 18px", font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
+            <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "auto", maxHeight: "600px" }}>
+                <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#14141F", display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", padding: "11px 18px", font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
                     <div>#</div><div>ARTIST</div><div>GENRE</div><div>REGION</div><div style={{ textAlign: "right" }}>SONGS</div><div style={{ textAlign: "right" }}>VIEWS</div><div>7-DAY</div><div>LATEST</div><div></div>
                 </div>
                 {rows.length > 0 ? rows.map(a => (
                     <Link href={`/artist/${a.id}`} key={a.id} style={{ display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", alignItems: "center", padding: "13px 18px", borderTop: "1px solid rgba(255,255,255,.05)", cursor: "pointer", textDecoration: "none", color: "inherit", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                         <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "15px" }}>{a.medal}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-                            <div style={{ width: "34px", height: "34px", borderRadius: "50%", background: a.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "13px", color: "rgba(255,255,255,.92)" }}>{a.ini}</div>
+                            {a.img ? (
+                                <img src={a.img} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flex: "none" }} />
+                            ) : (
+                                <div style={{ width: "34px", height: "34px", borderRadius: "50%", background: a.grad, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "13px", color: "rgba(255,255,255,.92)" }}>{a.ini}</div>
+                            )}
                             <div style={{ fontWeight: 600, fontSize: "14px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
                         </div>
                         <div><span style={{ background: "rgba(229,9,20,.13)", color: "#FF8378", fontSize: "11px", fontWeight: 500, padding: "3px 9px", borderRadius: "6px", whiteSpace: "nowrap" }}>{a.genre || "Unknown"}</span></div>
