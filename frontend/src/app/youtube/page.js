@@ -302,9 +302,9 @@ export default function YouTubeDashboard() {
             {/* title row */}
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "18px", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ font: "600 11px ui-monospace,Menlo,monospace", letterSpacing: "2px", color: "#FF5238" }}>YOUTUBE ANALYTICS</div>
+                    <div style={{ font: "600 11px Poppins, sans-serif", letterSpacing: "2px", color: "#FF5238" }}>YOUTUBE ANALYTICS</div>
                     <div style={{ fontSize: "26px", fontWeight: 700, letterSpacing: "-.6px", marginTop: "5px" }}>
-                        Tracking <span style={{ fontFamily: "ui-monospace,Menlo,monospace" }}>{stats?.total_artists || 0}</span> artists · <span style={{ fontFamily: "ui-monospace,Menlo,monospace" }}>{stats?.yt_songs || 0}</span> songs
+                        Tracking <span style={{ fontFamily: "Poppins, sans-serif" }}>{stats?.total_artists || 0}</span> artists · <span style={{ fontFamily: "Poppins, sans-serif" }}>{stats?.yt_songs || 0}</span> songs
                     </div>
                     <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.38)", marginTop: "5px" }}>
                         Last refreshed {stats?.last_collection?.last_run ? formatDateTime(stats.last_collection.last_run) : "—"}
@@ -312,19 +312,19 @@ export default function YouTubeDashboard() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "9px", flex: "none" }}>
                     <div style={{ display: "flex", gap: "8px" }}>
-                        <button onClick={handleRefresh} disabled={refreshing} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.14)", color: "#E9E9F2", padding: "9px 14px", borderRadius: "9px", font: "600 12px 'Space Grotesk'", cursor: "pointer", whiteSpace: "nowrap", opacity: refreshing ? 0.5 : 1 }}>
+                        <button onClick={handleRefresh} disabled={refreshing} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.14)", color: "#E9E9F2", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap", opacity: refreshing ? 0.5 : 1 }}>
                             {refreshing ? "↻ Refreshing..." : "↻ Refresh stats"}
                         </button>
-                        <button style={{ background: "transparent", border: "1px solid rgba(52,199,89,.4)", color: "#5BE08A", padding: "9px 14px", borderRadius: "9px", font: "600 12px 'Space Grotesk'", cursor: "pointer", whiteSpace: "nowrap" }}>
+                        <button style={{ background: "transparent", border: "1px solid rgba(52,199,89,.4)", color: "#5BE08A", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
                             ⌕ Find new songs
                         </button>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "9px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "9px", padding: "7px 12px" }}>
-                        <span style={{ font: "600 10px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.45)", letterSpacing: ".5px" }}>API QUOTA</span>
+                        <span style={{ font: "600 10px Poppins, sans-serif", color: "rgba(255,255,255,.45)", letterSpacing: ".5px" }}>API QUOTA</span>
                         <div style={{ width: "90px", height: "5px", background: "rgba(255,255,255,.1)", borderRadius: "3px", overflow: "hidden" }}>
                             <div style={{ height: "100%", width: `${quotaPct}%`, background: "linear-gradient(90deg,#FF8A3D,#FF3B30)" }}></div>
                         </div>
-                        <span style={{ font: "600 10px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.55)" }}>{quotaStr}</span>
+                        <span style={{ font: "600 10px Poppins, sans-serif", color: "rgba(255,255,255,.55)" }}>{quotaStr}</span>
                     </div>
                 </div>
             </div>
@@ -333,12 +333,12 @@ export default function YouTubeDashboard() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px", marginTop: "22px" }}>
                 {kpis.map((k, idx) => (
                     <div key={idx} style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", padding: "16px 17px" }}>
-                        <div style={{ font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1.4px", color: "rgba(255,255,255,.4)" }}>{k.label}</div>
+                        <div style={{ font: "500 10px Poppins, sans-serif", letterSpacing: "1.4px", color: "rgba(255,255,255,.4)" }}>{k.label}</div>
                         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: "9px" }}>
-                            <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "32px", fontWeight: 600, letterSpacing: "-1.2px", color: k.color }}>{k.val}</div>
+                            <div style={{ fontFamily: "Poppins, sans-serif", fontSize: "32px", fontWeight: 600, letterSpacing: "-1.2px", color: k.color }}>{k.val}</div>
                             <svg width="62" height="26" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points={k.spark} fill="none" stroke={k.color} strokeWidth="3" strokeLinejoin="round" opacity="0.85"></polyline></svg>
                         </div>
-                        <div style={{ font: "600 11px ui-monospace,Menlo,monospace", color: "#5BE08A", marginTop: "7px" }}>{k.delta}</div>
+                        <div style={{ font: "600 11px Poppins, sans-serif", color: "#5BE08A", marginTop: "7px" }}>{k.delta}</div>
                     </div>
                 ))}
             </div>
@@ -378,7 +378,7 @@ export default function YouTubeDashboard() {
                     </div>
                     <div style={{ maxHeight: "350px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "auto" }}>
                         {hot.length > 0 ? (
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Inter, sans-serif" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Poppins, sans-serif" }}>
                                 <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
                                     <tr>
                                         {["#", "Track", "Spike", "Pop"].map((h, i) => (
@@ -452,7 +452,7 @@ export default function YouTubeDashboard() {
                 <div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><span style={{ fontSize: "16px" }}>🆕</span><span style={{ fontWeight: 600, fontSize: "16px" }}>What's New</span></div>
-                        <span style={{ font: "500 10px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.4)", letterSpacing: ".5px" }}>PAST 7 DAYS</span>
+                        <span style={{ font: "500 10px Poppins, sans-serif", color: "rgba(255,255,255,.4)", letterSpacing: ".5px" }}>PAST 7 DAYS</span>
                     </div>
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
                         {fresh.length > 0 ? fresh.map((n, idx) => (
@@ -466,7 +466,7 @@ export default function YouTubeDashboard() {
                                     <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.title}</div>
                                     <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.45)" }}>{n.artist} · {n.date}</div>
                                 </div>
-                                <div style={{ background: "rgba(52,199,89,.14)", color: "#5BE08A", font: "700 9px ui-monospace,Menlo,monospace", padding: "4px 8px", borderRadius: "6px", flex: "none", letterSpacing: ".5px" }}>NEW</div>
+                                <div style={{ background: "rgba(52,199,89,.14)", color: "#5BE08A", font: "700 9px Poppins, sans-serif", padding: "4px 8px", borderRadius: "6px", flex: "none", letterSpacing: ".5px" }}>NEW</div>
                             </Link>
                         )) : (
                             <div style={{ padding: "16px", textAlign: "center", color: "rgba(255,255,255,.4)", fontSize: "13px" }}>No recent releases found.</div>
@@ -478,7 +478,7 @@ export default function YouTubeDashboard() {
             {/* leaderboard */}
             <div style={{ marginTop: "34px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontSize: "16px" }}>🏆</span><span style={{ fontWeight: 600, fontSize: "16px" }}>Artist Leaderboard</span>
-                <span style={{ font: "600 12px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.35)" }}>({total})</span>
+                <span style={{ font: "600 12px Poppins, sans-serif", color: "rgba(255,255,255,.35)" }}>({total})</span>
             </div>
 
             {/* filter bar */}
@@ -498,7 +498,7 @@ export default function YouTubeDashboard() {
                         border: `1px solid ${favOnly ? 'rgba(229,9,20,.5)' : 'rgba(255,255,255,.1)'}`,
                         background: favOnly ? 'rgba(229,9,20,.12)' : 'transparent',
                         color: favOnly ? '#FF6A52' : 'rgba(255,255,255,.6)',
-                        padding: "8px 13px", borderRadius: "9px", font: "600 12px 'Space Grotesk'", cursor: "pointer", whiteSpace: "nowrap"
+                        padding: "8px 13px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap"
                     }}>
                     ♥ Favourites
                 </button>
@@ -507,7 +507,7 @@ export default function YouTubeDashboard() {
                     {sortTabs.map(s => (
                         <button key={s.key} onClick={s.onClick} style={{
                             border: `1px solid ${s.border}`, background: s.bg, color: s.color,
-                            padding: "8px 12px", borderRadius: "8px", font: "600 12px 'Space Grotesk'", cursor: "pointer", whiteSpace: "nowrap"
+                            padding: "8px 12px", borderRadius: "8px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap"
                         }}>
                             {s.label}{s.arrow}
                         </button>
@@ -517,12 +517,12 @@ export default function YouTubeDashboard() {
 
             {/* table */}
             <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "auto", maxHeight: "600px" }}>
-                <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#14141F", display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", padding: "11px 18px", font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
+                <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#14141F", display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", padding: "11px 18px", font: "500 10px Poppins, sans-serif", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
                     <div>#</div><div>ARTIST</div><div>GENRE</div><div>REGION</div><div style={{ textAlign: "right" }}>SONGS</div><div style={{ textAlign: "right" }}>VIEWS</div><div>7-DAY</div><div>LATEST</div><div></div>
                 </div>
                 {rows.length > 0 ? rows.map(a => (
                     <Link href={`/artist/${a.id}`} key={a.id} style={{ display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", alignItems: "center", padding: "13px 18px", borderTop: "1px solid rgba(255,255,255,.05)", cursor: "pointer", textDecoration: "none", color: "inherit", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                        <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "15px" }}>{a.medal}</div>
+                        <div style={{ fontFamily: "Poppins, sans-serif", fontSize: "15px" }}>{a.medal}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                             {a.img ? (
                                 <img src={a.img} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flex: "none" }} />
@@ -533,10 +533,10 @@ export default function YouTubeDashboard() {
                         </div>
                         <div><span style={{ background: "rgba(229,9,20,.13)", color: "#FF8378", fontSize: "11px", fontWeight: 500, padding: "3px 9px", borderRadius: "6px", whiteSpace: "nowrap" }}>{a.genre || "Unknown"}</span></div>
                         <div style={{ fontSize: "12px", color: "rgba(255,255,255,.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>📍 {a.region || "Unknown"}</div>
-                        <div style={{ textAlign: "right", fontFamily: "ui-monospace,Menlo,monospace", fontSize: "12.5px", color: "rgba(255,255,255,.7)" }}>{a.total_yt_songs || a.songs || 0}</div>
-                        <div style={{ textAlign: "right", fontFamily: "ui-monospace,Menlo,monospace", fontSize: "14px", fontWeight: 600 }}>{formatNumber(a.total_yt_views || 0)}</div>
+                        <div style={{ textAlign: "right", fontFamily: "Poppins, sans-serif", fontSize: "12.5px", color: "rgba(255,255,255,.7)" }}>{a.total_yt_songs || a.songs || 0}</div>
+                        <div style={{ textAlign: "right", fontFamily: "Poppins, sans-serif", fontSize: "14px", fontWeight: 600 }}>{formatNumber(a.total_yt_views || 0)}</div>
                         <svg width="84" height="22" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points={a.spark} fill="none" stroke={a.trendColor} strokeWidth="3" strokeLinejoin="round"></polyline></svg>
-                        <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.5)", fontFamily: "ui-monospace,Menlo,monospace" }}>{a.latest_release_date ? formatDate(a.latest_release_date) : "—"}</div>
+                        <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.5)", fontFamily: "Poppins, sans-serif" }}>{a.latest_release_date ? formatDate(a.latest_release_date) : "—"}</div>
                         <div onClick={(e) => toggleFav(e, a.id)} style={{ fontSize: "17px", color: a.favColor, textAlign: "center" }}>{a.heart}</div>
                     </Link>
                 )) : (
