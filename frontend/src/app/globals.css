@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 /* ═══════════════════════════════════════════════════════════
    Music Intelligence Dashboard — Design System
    Dark theme with YouTube red + Spotify green accents
@@ -1099,4 +1100,26 @@ a {
   .stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* overrides for the new dashboard */
+body.symphony-pulse {
+  background: #08080E;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.symphony-pulse ::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+body.symphony-pulse ::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.12);
+  border-radius: 6px;
+}
+body.symphony-pulse ::-webkit-scrollbar-track {
+  background: transparent;
 }
