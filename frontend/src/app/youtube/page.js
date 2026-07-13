@@ -61,6 +61,8 @@ export default function YouTubeDashboard() {
     const [sortBy, setSortBy] = useState("views");
     const [sortDir, setSortDir] = useState("desc");
     const [favOnly, setFavOnly] = useState(false);
+    const [genreFilter, setGenreFilter] = useState("");
+    const [regionFilter, setRegionFilter] = useState("");
     const [favs, setFavs] = useState({});
     
     // Song leaderboard state
@@ -127,6 +129,8 @@ export default function YouTubeDashboard() {
                 page, limit: 100, sort_by: sortBy, sort_dir: sortDir, // fetch more for client side search/favs
             });
             if (search && !favOnly) params.set("search", search);
+            if (genreFilter) params.set("genre", genreFilter);
+            if (regionFilter) params.set("region", regionFilter);
             
             const res = await fetch(`${API}/api/artists?${params}`).then(r => r.json());
             setArtists(res.artists || []);
@@ -134,7 +138,7 @@ export default function YouTubeDashboard() {
             setTotal(res.total || 0);
         } catch (e) { console.error("Failed to fetch artists:", e); }
         setLoading(false);
-    }, [page, search, sortBy, sortDir, favOnly]);
+    }, [page, search, sortBy, sortDir, favOnly, genreFilter, regionFilter]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
     useEffect(() => { fetchArtists(); }, [fetchArtists]);
@@ -454,7 +458,7 @@ export default function YouTubeDashboard() {
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><span style={{ fontSize: "16px" }}>🆕</span><span style={{ fontWeight: 600, fontSize: "16px" }}>What's New</span></div>
                         <span style={{ font: "500 10px Poppins, sans-serif", color: "rgba(255,255,255,.4)", letterSpacing: ".5px" }}>PAST 7 DAYS</span>
                     </div>
-                    <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
+                    <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "auto", maxHeight: "350px" }}>
                         {fresh.length > 0 ? fresh.map((n, idx) => (
                             <Link href={`/artist/${n.id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                                 {n.img ? (
@@ -492,6 +496,21 @@ export default function YouTubeDashboard() {
                         style={{ background: "transparent", border: "none", outline: "none", color: "#E9E9F2", fontSize: "13px", width: "100%" }}
                     />
                 </div>
+                <select value={genreFilter} onChange={e => {setGenreFilter(e.target.value); setPage(1);}} style={{ background: "#0E0E16", border: "1px solid rgba(255,255,255,.08)", color: "rgba(255,255,255,.6)", padding: "8px 12px", borderRadius: "9px", outline: "none", fontSize: "12px", fontFamily: "Poppins, sans-serif" }}>
+                    <option value="">Genre</option>
+                    <option value="Hip Hop">Hip Hop</option>
+                    <option value="Pop">Pop</option>
+                    <option value="Indie">Indie</option>
+                    <option value="Punjabi">Punjabi</option>
+                    <option value="Bollywood">Bollywood</option>
+                </select>
+                <select value={regionFilter} onChange={e => {setRegionFilter(e.target.value); setPage(1);}} style={{ background: "#0E0E16", border: "1px solid rgba(255,255,255,.08)", color: "rgba(255,255,255,.6)", padding: "8px 12px", borderRadius: "9px", outline: "none", fontSize: "12px", fontFamily: "Poppins, sans-serif" }}>
+                    <option value="">Region</option>
+                    <option value="India">India</option>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Mumbai">Mumbai</option>
+                    <option value="Punjab">Punjab</option>
+                </select>
                 <button
                     onClick={() => setFavOnly(!favOnly)}
                     style={{
@@ -533,7 +552,7 @@ export default function YouTubeDashboard() {
                         </div>
                         <div><span style={{ background: "rgba(229,9,20,.13)", color: "#FF8378", fontSize: "11px", fontWeight: 500, padding: "3px 9px", borderRadius: "6px", whiteSpace: "nowrap" }}>{a.genre || "Unknown"}</span></div>
                         <div style={{ fontSize: "12px", color: "rgba(255,255,255,.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>📍 {a.region || "Unknown"}</div>
-                        <div style={{ textAlign: "right", fontFamily: "Poppins, sans-serif", fontSize: "12.5px", color: "rgba(255,255,255,.7)" }}>{a.total_yt_songs || a.songs || 0}</div>
+                        <div style={{ textAlign: "right", fontFamily: "Poppins, sans-serif", fontSize: "12.5px", color: "rgba(255,255,255,.7)" }}>{a.yt_song_count || a.total_yt_songs || a.songs || 0}</div>
                         <div style={{ textAlign: "right", fontFamily: "Poppins, sans-serif", fontSize: "14px", fontWeight: 600 }}>{formatNumber(a.total_yt_views || 0)}</div>
                         <svg width="84" height="22" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points={a.spark} fill="none" stroke={a.trendColor} strokeWidth="3" strokeLinejoin="round"></polyline></svg>
                         <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,.5)", fontFamily: "Poppins, sans-serif" }}>{a.latest_release_date ? formatDate(a.latest_release_date) : "—"}</div>
