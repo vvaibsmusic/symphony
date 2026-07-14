@@ -114,6 +114,20 @@ def init_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_platform ON viral_alerts(platform)")
     conn.commit()
 
+    # Auto-seed if database is empty
+    cursor = conn.execute("SELECT COUNT(*) FROM artists")
+    count = cursor.fetchone()[0]
+    if count == 0:
+        print("[init_db] Database is empty. Seeding default artists...")
+        try:
+            from seed_artists import ARTISTS, upsert_artist
+            for artist in ARTISTS:
+                upsert_artist(conn, artist)
+            conn.commit()
+            print(f"[init_db] Successfully seeded {len(ARTISTS)} artists.")
+        except Exception as e:
+            print(f"[init_db] Failed to auto-seed: {e}")
+
     conn.close()
     if _USE_TURSO:
         print(f"Database initialized at {_TURSO_URL}")

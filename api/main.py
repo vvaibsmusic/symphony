@@ -303,6 +303,20 @@ def refresh_status():
     }
 
 
+@app.get("/api/refresh/logs")
+def get_refresh_logs(limit: int = 100):
+    """Get the last N lines of collector.log."""
+    try:
+        log_path = os.path.join(project_dir, "collector.log")
+        if not os.path.exists(log_path):
+            return {"logs": ["Log file does not exist yet."]}
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            return {"logs": [line.strip() for line in lines[-limit:]]}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ─── Add Artist ─────────────────────────────────────────────
 
 class AddArtistRequest(BaseModel):
