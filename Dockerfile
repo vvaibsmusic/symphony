@@ -8,7 +8,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         wget \
-        gnupg && \
+        gnupg \
+        gcc \
+        libc6-dev && \
     # Install Node.js 20
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
@@ -31,6 +33,7 @@ RUN pip install --no-cache-dir -r api/requirements.txt
 
 # ── Build Go binary ──────────────────────────────────────────────────────────
 WORKDIR /app/collector_go
+RUN go get github.com/mattn/go-sqlite3 && go mod tidy
 RUN CGO_ENABLED=1 go build -o youtube_enricher
 
 # ── Build Next.js frontend ───────────────────────────────────────────────────
