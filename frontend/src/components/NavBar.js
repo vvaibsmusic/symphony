@@ -23,7 +23,7 @@ export default function NavBar() {
       </div>
 
       <div style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(8,8,14,.82)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "14px 28px", display: "flex", alignItems: "center", gap: "20px" }}>
+        <div className="symphony-navbar-inner">
           <Link href="/youtube" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", textDecoration: "none", color: "inherit" }}>
             <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: "var(--yt-red)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flex: "none" }}>🎶</div>
             <span style={{ fontWeight: 700, fontSize: "19px", letterSpacing: "-.5px" }}>symphony</span>

@@ -1136,7 +1136,7 @@ export default function SpotifyDashboard() {
                 endReached={loadMore}
                 style={{ height: "100%" }}
                 components={{
-                    Table: ({ style, ...props }) => <table {...props} style={{ ...style, width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Inter, sans-serif" }} />,
+                    Table: ({ style, ...props }) => <table {...props} style={{ ...style, width: "100%", minWidth: "800px", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Inter, sans-serif" }} />,
                     TableHead: React.forwardRef(({ style, ...props }, ref) => <thead {...props} ref={ref} style={{ ...style, position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }} />),
                     TableRow: (props) => <tr {...props} style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s ease" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"} />
                 }}

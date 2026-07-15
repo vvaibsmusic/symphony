@@ -75,7 +75,7 @@ export default function ArtistDetail() {
 
     if (loading && !data) {
         return (
-            <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "26px 28px 60px", position: "relative", minHeight: "80vh" }}>
+            <div className="symphony-page-container" style={{ minHeight: "80vh" }}>
                 {showLoadingScreen && (
                     <div style={{
                         position: "absolute", inset: 0, zIndex: 50,
@@ -104,7 +104,7 @@ export default function ArtistDetail() {
 
     if (!data || !data.artist) {
         return (
-            <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "26px 28px 60px", textAlign: "center" }}>
+            <div className="symphony-page-container" style={{ textAlign: "center" }}>
                 <div style={{ padding: "36px", color: "rgba(255,255,255,.4)", fontSize: "14px" }}>
                     Artist not found.<br/><br/>
                     <Link href="/youtube" style={{ color: "#FF3B30", textDecoration: "none" }}>← Back to Leaderboard</Link>
@@ -122,7 +122,7 @@ export default function ArtistDetail() {
     const sortedSongs = [...songs].sort((a, b) => (b.latest_play_count || 0) - (a.latest_play_count || 0));
 
     return (
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "22px 28px 60px" }}>
+        <div className="symphony-page-container" style={{ paddingTop: "22px" }}>
             
             {showLoadingScreen && (
                 <div style={{
@@ -197,7 +197,7 @@ export default function ArtistDetail() {
                 <span style={{ fontSize: "16px" }}>🎵</span><span style={{ fontWeight: 600, fontSize: "16px" }}>All Songs</span>
                 <span style={{ font: "600 12px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.35)" }}>({songs.length})</span>
             </div>
-            <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
+            <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "auto" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 150px 96px 86px 88px 36px", gap: "12px", padding: "11px 18px", font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)", minWidth: "800px" }}>
                     <div>#</div><div>SONG</div><div>ALBUM</div><div style={{ textAlign: "right" }}>VIEWS</div><div style={{ textAlign: "right" }}>LIKES</div><div>RELEASED</div><div></div>
                 </div>
