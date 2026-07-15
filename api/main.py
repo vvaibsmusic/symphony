@@ -249,6 +249,12 @@ def trigger_refresh_stats():
     return start_collector_process("enrich_all.py", "stats")
 
 
+@app.post("/api/simulate")
+def trigger_simulation():
+    """Run a 7-day simulation on the database."""
+    return start_collector_process("simulate_7_days.py", "simulation")
+
+
 @app.post("/api/refresh/discover")
 def trigger_refresh_discover():
     """Discover new songs for all artists via ytmusicapi."""
