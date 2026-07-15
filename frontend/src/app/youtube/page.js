@@ -536,11 +536,11 @@ export default function YouTubeDashboard() {
 
             {/* table */}
             <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "auto", maxHeight: "600px" }}>
-                <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#14141F", display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", padding: "11px 18px", font: "500 10px Poppins, sans-serif", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
+                <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#14141F", display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", padding: "11px 18px", font: "500 10px Poppins, sans-serif", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)", minWidth: "1000px" }}>
                     <div>#</div><div>ARTIST</div><div>GENRE</div><div>REGION</div><div style={{ textAlign: "right" }}>SONGS</div><div style={{ textAlign: "right" }}>VIEWS</div><div>7-DAY</div><div>LATEST</div><div></div>
                 </div>
                 {rows.length > 0 ? rows.map(a => (
-                    <Link href={`/artist/${a.id}`} key={a.id} style={{ display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", alignItems: "center", padding: "13px 18px", borderTop: "1px solid rgba(255,255,255,.05)", cursor: "pointer", textDecoration: "none", color: "inherit", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                    <Link href={`/artist/${a.id}`} key={a.id} style={{ display: "grid", gridTemplateColumns: "46px 1fr 130px 150px 78px 86px 92px 110px 40px", gap: "12px", alignItems: "center", padding: "13px 18px", borderTop: "1px solid rgba(255,255,255,.05)", cursor: "pointer", textDecoration: "none", color: "inherit", transition: "background 0.2s", minWidth: "1000px" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                         <div style={{ fontFamily: "Poppins, sans-serif", fontSize: "15px" }}>{a.medal}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                             {a.img ? (

@@ -198,11 +198,11 @@ export default function ArtistDetail() {
                 <span style={{ font: "600 12px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.35)" }}>({songs.length})</span>
             </div>
             <div style={{ marginTop: "12px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "hidden" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 150px 96px 86px 88px 36px", gap: "12px", padding: "11px 18px", font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 150px 96px 86px 88px 36px", gap: "12px", padding: "11px 18px", font: "500 10px ui-monospace,Menlo,monospace", letterSpacing: "1px", color: "rgba(255,255,255,.35)", borderBottom: "1px solid rgba(255,255,255,.07)", minWidth: "800px" }}>
                     <div>#</div><div>SONG</div><div>ALBUM</div><div style={{ textAlign: "right" }}>VIEWS</div><div style={{ textAlign: "right" }}>LIKES</div><div>RELEASED</div><div></div>
                 </div>
                 {sortedSongs.length > 0 ? sortedSongs.map((t, i) => (
-                    <div key={t.id} style={{ display: "grid", gridTemplateColumns: "40px 1fr 150px 96px 86px 88px 36px", gap: "12px", alignItems: "center", padding: "11px 18px", borderTop: "1px solid rgba(255,255,255,.05)", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                    <div key={t.id} style={{ display: "grid", gridTemplateColumns: "40px 1fr 150px 96px 86px 88px 36px", gap: "12px", alignItems: "center", padding: "11px 18px", borderTop: "1px solid rgba(255,255,255,.05)", transition: "background 0.2s", minWidth: "800px" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                         <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "12px", color: "rgba(255,255,255,.4)" }}>{i + 1}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "11px", minWidth: 0 }}>
                             <div style={{ width: "38px", height: "26px", borderRadius: "5px", background: getGrad(t.id), flex: "none", backgroundImage: t.thumbnail_url ? `url(${t.thumbnail_url})` : "none", backgroundSize: "cover", backgroundPosition: "center" }}></div>

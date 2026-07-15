@@ -23,13 +23,13 @@ export default function Home() {
     <div className="page">
       <div className="page-header" style={{ textAlign: "center", padding: "4rem 0 2rem" }}>
         <div style={{ marginBottom: "1.5rem" }}>
-          <img src="/logo.png" alt="vvaibsmusic" style={{ width: 80, height: 80, borderRadius: 16, objectFit: "cover", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }} />
+          <div style={{ fontSize: 64, marginBottom: 16 }}>🎶</div>
         </div>
         <h1 className="symphony-brand" style={{ fontSize: "3.2rem", marginBottom: "0.5rem" }}>
           symphony
         </h1>
         <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 400, marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          by <img src="/logo.png" alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: "cover" }} /> vvaibsmusic
+          by 🎶 vvaibsmusic
         </p>
         <p className="page-subtitle" style={{ fontSize: "1.05rem", maxWidth: 600, margin: "0 auto" }}>
           Music intelligence dashboard tracking viral songs, new releases &amp; artist analytics
