@@ -1,11 +1,18 @@
 # Symphony Project - Knowledge Transfer (KT)
 
-Welcome, Claude Fable! This document serves as a complete Knowledge Transfer for the "Symphony" music intelligence dashboard. The user is transitioning the project to you to resolve ongoing bugs and stabilize the application.
+Welcome! This document serves as a complete Knowledge Transfer for the "Symphony" music intelligence dashboard. The user is transitioning the project to you to resolve ongoing bugs and stabilize the application.
 
 ## Development Log
 
+### **Major UI Fixes, SQLite Migration & Simulation (July 15-16, 2026)**
+- **Turso Removed**: Completely stripped all Turso dependencies, environment variables, and `libsql` code. The project now uses purely local SQLite (`db/music_dashboard.db`) due to quota issues and user preference.
+- **Deep Clean**: Purged `collector_go/` and unused files. Simplified the python backend to run everything synchronously via `subprocess` calls.
+- **Artist Photos & Viral Songs**: Implemented robust seeders (`seed_photos_and_viral.py`) to fetch missing artist avatars via `ytmusicapi` and successfully render them on the UI.
+- **Mobile Responsiveness**: Extensively refactored `globals.css`, `youtube/page.js`, `spotify/page.js`, and `artist/[id]/page.js`. Added `symphony-page-container`, `symphony-navbar-inner`, and ensured horizontal tables scroll via `overflow: auto` without breaking the viewport (`overflow-x: hidden` on body).
+- **GitHub Actions**: Updated the `daily_collection.yml` cron to trigger YouTube Discover and Stats. (Note: Spotify triggers were temporarily added and then reverted per user request).
+- **7-Day Simulation**: Built and executed `simulate_7_days.py` via `/api/simulate` on Hugging Face to inject 7 days of realistic growth and viral breakouts into the ephemeral database.
+
 ### **Bug Fixes, UI Polish & API Fallbacks (July 09, 2026)**
-- Fixed Turso DB quota exceeded error by moving to a local SQLite database that bypasses quotas completely (`hf-symphony/api/db.py`, `.env`).
 - Implemented GitHub Actions Keep-Alive cron job to ping the dashboard and prevent 30s cold starts.
 - Reduced `logo.png` file size to 4.6KB and restored the missing navbar logo.
 - Overhauled "What's Hot?" section into a "🏆 Viral Leaderboard" with absolute positioned rank badges.
@@ -14,19 +21,7 @@ Welcome, Claude Fable! This document serves as a complete Knowledge Transfer for
 
 **Known Issues:**
 - The `YOUTUBE_API_KEY` on Hugging Face is either missing or invalid, causing "No YouTube channel found" errors.
-
-| File | Change |
-|------|--------|
-| `api/db.py` | Switched to standard local sqlite3 over libsql to bypass Turso quotas |
-| `.env` | Cleared Turso URL/token |
-| `.github/workflows/keep-alive.yml` | Created keep-alive cron job for HF space |
-| `frontend/public/logo_small.png` | Added optimized logo |
-| `frontend/src/app/youtube/client.js` | Updated What's Hot to Leaderboard UI |
-| `frontend/src/app/spotify/page.js` | Updated What's Hot to Leaderboard UI |
-| `api/requirements.txt` | Added `google-api-python-client` and `ytmusicapi` |
-| `api/main.py` | Added try/except to surface YouTube API errors correctly |
-| `collector/youtube_client.py` | Bubbled up ValueError on missing API keys |
-
+- **Ephemeral Storage**: Because the project is deployed on Hugging Face Spaces and Turso was removed, the local SQLite database resets every time the Space sleeps. The user was advised to enable Persistent Storage on Hugging Face.
 
 ## 1. Architecture Overview
 
@@ -37,51 +32,20 @@ Symphony is a full-stack dashboard deployed on **Hugging Face Spaces (Docker)**.
   - Client-side data fetching calls `/api/...`.
 - **Backend**: FastAPI (Python). Located in `api/main.py`.
   - Serves JSON stats to the frontend.
-  - Runs a background asyncio scheduler (`_daily_refresh_loop`) that triggers the data collectors every day at 10 AM IST.
-- **Data Collectors**: 
-  - Originally written in Python, but the **YouTube Collector was recently migrated to Go (Golang)** for speed. Located in `collector_go/`. 
-  - The Go binary (`youtube_enricher`) is compiled during the Docker build and executed by the Python backend via `subprocess`.
-- **Database**: Turso (Edge SQLite). 
-  - Interacted with using `libsql-experimental` in Python and `github.com/tursodatabase/libsql-client-go/libsql` in Go.
-  - Environment variables: `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+  - Exposes endpoints to trigger Python collection scripts (`/api/refresh/...`).
+- **Database**: Local SQLite. 
+  - File is `db/music_dashboard.db`.
 - **Deployment**: Hugging Face Spaces.
-  - A custom `Dockerfile` installs Node, Python, and Go.
-  - It builds Next.js, compiles the Go binary, and uses a `start.sh` script to run the FastAPI backend and Next.js frontend concurrently using a reverse proxy (Next.js rewrites `/api/:path*` to `http://127.0.0.1:8000`).
+  - A custom `Dockerfile` installs Node, Python.
+  - It builds Next.js and uses a `start.sh` script to run the FastAPI backend and Next.js frontend concurrently using a reverse proxy (Next.js rewrites `/api/:path*` to `http://127.0.0.1:8000`).
 
 ## 2. Recent Major Changes (Context for Bugs)
 
-1. **Turso Migration**: The DB was moved from local SQLite to remote Turso. 
-   - **Impact**: We had to write a custom `LibsqlDictCursor` in `collector/db.py` to make `libsql` behave like `sqlite3.Row`.
-2. **Go Collector Migration**: The YouTube collector was rewritten in Go (`collector_go/youtube.go`).
-   - **Impact**: Python backend now triggers a Go binary instead of calling a Python function.
+1. **Turso -> SQLite Migration**: The DB was moved back to local SQLite from Turso. The app now relies entirely on standard `sqlite3` driver.
+2. **Go Collector Removed**: The Go collector was deleted.
 3. **Frontend Virtualization**: Added `TableVirtuoso` to fix frontend lag.
-   - **Impact**: Required converting server components to client components (`"use client"`), which caused `forwardRef` React crashes until `import React from 'react'` was explicitly added.
 
-## 3. Known Issues & Bugs (What You Need to Fix)
-
-Here is a list of the exact issues the system has been fighting recently. You should verify if my recent patches fully resolved them or if they need further fixing:
-
-### Issue A: "New UI is not reflecting / stuck on Loading" (N+1 Query Timeout)
-- **Symptom**: The frontend stays on the "Loading..." spinner forever. 
-- **Cause**: In `api/main.py`, the `get_artists()` and `get_spotify_artists()` endpoints were performing correlated subqueries (`SELECT MAX(id) FROM play_snapshots GROUP BY song_id`) for *every single song* to calculate stats. Over a remote Turso network connection, this took > 60 seconds and timed out (`context deadline exceeded`).
-- **Status**: I *just* rewrote the SQL queries using Common Table Expressions (CTEs) to do a single fast join. You should verify if this fully fixed the loading issue or if the CTEs have syntax errors / missing columns.
-
-### Issue B: Turso / Libsql Type Strictness
-- **Symptom**: 500 Internal Server Error in FastAPI.
-- **Cause**: Standard `sqlite3` allows passing SQL parameters as a Python `list` (e.g., `conn.execute(sql, [limit, offset])`). `libsql-experimental` strictly requires a `tuple` and throws `TypeError: argument 'parameters': 'list' object cannot be converted to 'PyTuple'`.
-- **Status**: I added a patch in `collector/db.py` inside `LibsqlDictConnection.execute()` to automatically do `params = tuple(params)` if a list is passed. Check if there are other `.execute()` calls bypassing this wrapper.
-
-### Issue C: Next.js API Routing on Hugging Face
-- **Symptom**: `fetch()` calls failing in the browser because they tried to reach `http://localhost:8000`.
-- **Cause**: On HF Spaces, `localhost` resolves to the user's browser, not the Docker container. 
-- **Status**: Fixed by setting `NEXT_PUBLIC_API_URL=""` in the Dockerfile so Next.js uses relative paths (e.g., `/api/artists`), which are then caught by `next.config.mjs` rewrites and proxied to the Python backend locally within the container. Verify that NO files in `frontend/src/` still hardcode `localhost`.
-
-### Issue D: Hugging Face Startup Race Condition
-- **Symptom**: Next.js throws 502 errors when the Space first boots up.
-- **Cause**: Next.js starts before FastAPI (Uvicorn) is fully ready to accept connections.
-- **Status**: Modified `start.sh` to include a `while ! curl -s http://127.0.0.1:8000/api/stats > /dev/null; do sleep 1; done` loop before starting Next.js. 
-
-## 4. Development Guide for Fable
+## 4. Development Guide for Agents
 
 - **To run backend locally**: 
   ```bash
@@ -95,7 +59,3 @@ Here is a list of the exact issues the system has been fighting recently. You sh
   cd hf-symphony/frontend
   npm run dev
   ```
-- **Logs**: If Hugging Face is crashing, always check the `logs/build` or `logs/container` in the Space UI to see if Uvicorn threw a Python traceback.
-- **Syncing**: Keep in mind there are two repos in the workspace (`hf-symphony` and `symphony/music-dashboard`). If you make fixes, make sure they are applied to the `hf-symphony` codebase, committed, and pushed.
-
-Good luck! Optimize intelligently and double-check your SQL syntax.
