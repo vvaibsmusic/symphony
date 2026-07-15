@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir -r api/requirements.txt
 
 # ── Build Go binary ──────────────────────────────────────────────────────────
 WORKDIR /app/collector_go
-RUN CGO_ENABLED=0 go build -o youtube_enricher
+RUN CGO_ENABLED=1 go build -o youtube_enricher
 
 # ── Build Next.js frontend ───────────────────────────────────────────────────
 WORKDIR /app/frontend

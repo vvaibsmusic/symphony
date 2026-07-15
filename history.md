@@ -95,7 +95,6 @@ Here is a list of the exact issues the system has been fighting recently. You sh
   cd hf-symphony/frontend
   npm run dev
   ```
-- **Local DB Testing**: Ensure you have `libsql-experimental` installed in the python environment (`pip install libsql-experimental`), otherwise `collector/db.py` falls back to standard local sqlite, masking Turso-specific bugs.
 - **Logs**: If Hugging Face is crashing, always check the `logs/build` or `logs/container` in the Space UI to see if Uvicorn threw a Python traceback.
 - **Syncing**: Keep in mind there are two repos in the workspace (`hf-symphony` and `symphony/music-dashboard`). If you make fixes, make sure they are applied to the `hf-symphony` codebase, committed, and pushed.
 

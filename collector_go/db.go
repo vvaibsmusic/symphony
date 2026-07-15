@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	_ "github.com/tursodatabase/libsql-client-go/libsql"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Artist struct {
@@ -30,15 +30,7 @@ type Song struct {
 }
 
 func getDBConnection() (*sql.DB, error) {
-	dbURL := os.Getenv("TURSO_DATABASE_URL")
-	dbToken := os.Getenv("TURSO_AUTH_TOKEN")
-
-	if dbURL == "" || dbToken == "" {
-		return nil, fmt.Errorf("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set")
-	}
-
-	url := fmt.Sprintf("%s?authToken=%s", dbURL, dbToken)
-	return sql.Open("libsql", url)
+	return sql.Open("sqlite3", "../db/music_dashboard.db")
 }
 
 func UpsertArtist(db *sql.DB, artist Artist) error {

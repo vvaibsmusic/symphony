@@ -414,8 +414,7 @@ def compute_artist_metrics_from_history(snaps_by_song):
 def fetch_snapshots_by_song(conn, song_ids, platform, per_song_limit=30):
     """Fetch recent snapshots for many songs in ONE query.
 
-    Returns dict of song_id -> snapshot dicts, newest first. Turso executes
-    each statement over the network, so batching here is what keeps
+    Returns dict of song_id -> snapshot dicts, newest first. Batching here is what keeps
     endpoints from doing one round trip per song.
     """
     result = {sid: [] for sid in song_ids}
