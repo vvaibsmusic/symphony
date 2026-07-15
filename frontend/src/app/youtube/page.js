@@ -277,7 +277,7 @@ export default function YouTubeDashboard() {
     const quotaStr = quota ? `${formatNumber(quota.used)} / ${formatNumber(quota.limit)}` : "— / —";
 
     return (
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "26px 28px 60px", position: "relative" }}>
+        <div className="symphony-page-container">
             
             {/* Overlay for slow loading */}
             {showLoadingScreen && (
@@ -304,7 +304,7 @@ export default function YouTubeDashboard() {
             )}
 
             {/* title row */}
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "18px", flexWrap: "wrap" }}>
+            <div className="symphony-title-row">
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ font: "600 11px Poppins, sans-serif", letterSpacing: "2px", color: "#FF5238" }}>YOUTUBE ANALYTICS</div>
                     <div style={{ fontSize: "26px", fontWeight: 700, letterSpacing: "-.6px", marginTop: "5px" }}>
@@ -314,7 +314,7 @@ export default function YouTubeDashboard() {
                         Last refreshed {stats?.last_collection?.last_run ? formatDateTime(stats.last_collection.last_run) : "—"}
                     </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "9px", flex: "none" }}>
+                <div className="symphony-title-actions">
                     <div style={{ display: "flex", gap: "8px" }}>
                         <button onClick={handleRefresh} disabled={refreshing} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.14)", color: "#E9E9F2", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap", opacity: refreshing ? 0.5 : 1 }}>
                             {refreshing ? "↻ Refreshing..." : "↻ Refresh stats"}
@@ -334,7 +334,7 @@ export default function YouTubeDashboard() {
             </div>
 
             {/* KPIs */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px", marginTop: "22px" }}>
+            <div className="symphony-kpi-grid">
                 {kpis.map((k, idx) => (
                     <div key={idx} style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", padding: "16px 17px" }}>
                         <div style={{ font: "500 10px Poppins, sans-serif", letterSpacing: "1.4px", color: "rgba(255,255,255,.4)" }}>{k.label}</div>
@@ -348,7 +348,7 @@ export default function YouTubeDashboard() {
             </div>
 
             {/* two-up: hot + new */}
-            <div style={{ display: "grid", gridTemplateColumns: "1.25fr 1fr", gap: "18px", marginTop: "30px", alignItems: "start" }}>
+            <div className="symphony-two-up-grid">
 
                 {/* whats hot */}
                 <div>
