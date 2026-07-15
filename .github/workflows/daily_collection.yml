@@ -61,56 +61,10 @@ jobs:
           echo "Triggering YouTube Stats..."
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://vvaibsmusic-symphony.hf.space/api/refresh/stats")
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE: $BODY"
           if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "❌ YouTube Stats trigger failed"
+            echo "❌ Stats trigger failed"
             exit 1
           fi
-          echo "✅ YouTube Stats collection started"
-
-      - name: Wait for YouTube Stats to finish
-        run: |
-          echo "Waiting for YouTube stats to complete..."
-          for i in $(seq 1 60); do
-            sleep 30
-            STATUS=$(curl -s "https://vvaibsmusic-symphony.hf.space/api/refresh/status")
-            RUNNING=$(echo "$STATUS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('running', False))" 2>/dev/null || echo "unknown")
-            echo "Check $i: running=$RUNNING"
-            if [ "$RUNNING" = "False" ]; then
-              echo "✅ YouTube Stats finished"
-              break
-            fi
-          done
-
-      - name: Trigger Spotify Discover
-        run: |
-          echo "Triggering Spotify Discover..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://vvaibsmusic-symphony.hf.space/api/refresh/spotify/discover")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "❌ Spotify Discover trigger failed"
-            exit 1
-          fi
-
-      - name: Wait for Spotify Discover to finish
-        run: |
-          echo "Waiting for Spotify discover to complete..."
-          for i in $(seq 1 40); do
-            sleep 15
-            STATUS=$(curl -s "https://vvaibsmusic-symphony.hf.space/api/refresh/status")
-            RUNNING=$(echo "$STATUS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('running', False))" 2>/dev/null || echo "unknown")
-            if [ "$RUNNING" = "False" ]; then
-              echo "✅ Spotify Discover finished"
-              break
-            fi
-          done
-
-      - name: Trigger Spotify Stats
-        run: |
-          echo "Triggering Spotify Stats..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://vvaibsmusic-symphony.hf.space/api/refresh/spotify/stats")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "❌ Spotify Stats trigger failed"
-            exit 1
-          fi
-          echo "✅ Spotify Stats collection started"
+          echo "✅ Stats collection started"
