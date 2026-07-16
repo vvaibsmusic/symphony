@@ -53,6 +53,8 @@ function getGrad(str) {
 
 export default function YouTubeDashboard() {
     const [viral, setViral] = useState([]);
+    const [growth, setGrowth] = useState([]);
+    const [leaderboardMode, setLeaderboardMode] = useState("viral");
     const [releases, setReleases] = useState([]);
     const [artists, setArtists] = useState([]);
     const [stats, setStats] = useState(null);
@@ -113,6 +115,8 @@ export default function YouTubeDashboard() {
             setStats(statsRes || null);
             const viralRes = await fetch(`${API}/api/youtube/viral?limit=100`).then(r => r.json()).catch(() => ({ viral: [] }));
             setViral(viralRes.viral || []);
+            const growthRes = await fetch(`${API}/api/youtube/growth?limit=100`).then(r => r.json()).catch(() => ({ growth: [] }));
+            setGrowth(growthRes.growth || []);
             const releasesRes = await fetch(`${API}/api/watchlist/releases`).then(r => r.json()).catch(() => ({ watched: [], other: [] }));
             setReleases([...(releasesRes.watched || []), ...(releasesRes.other || [])]);
             const quotaRes = await fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null);
@@ -167,7 +171,7 @@ export default function YouTubeDashboard() {
         { label: 'TOTAL ARTISTS', val: formatNumber(stats?.total_artists || 0), delta: '+4 wk', color: '#E9E9F2', spark: sp([60,62,61,66,68,70,72,78]) },
     ];
 
-    let filteredSongs = viral || [];
+    let filteredSongs = leaderboardMode === "viral" ? (viral || []) : (growth || []);
     if (songSearch) {
         filteredSongs = filteredSongs.filter(v => 
             (v.title || "").toLowerCase().includes(songSearch.toLowerCase()) || 
@@ -178,29 +182,49 @@ export default function YouTubeDashboard() {
         filteredSongs = filteredSongs.filter(v => favs[v.artist_id]);
     }
 
-    filteredSongs = [...filteredSongs].sort((a, b) => {
-        let valA, valB;
-        if (songSortBy === 'spike') {
-            valA = a.growth_factor || 0;
-            valB = b.growth_factor || 0;
-        } else if (songSortBy === 'prev') {
-            valA = a.previous_count || 0;
-            valB = b.previous_count || 0;
-        } else if (songSortBy === 'curr') {
-            valA = a.current_count || 0;
-            valB = b.current_count || 0;
-        }
-        return songSortDir === 'desc' ? valB - valA : valA - valB;
-    });
+    if (leaderboardMode === "viral") {
+        filteredSongs = [...filteredSongs].sort((a, b) => {
+            let valA, valB;
+            if (songSortBy === 'spike') {
+                valA = a.growth_factor || 0;
+                valB = b.growth_factor || 0;
+            } else if (songSortBy === 'prev') {
+                valA = a.previous_count || 0;
+                valB = b.previous_count || 0;
+            } else if (songSortBy === 'curr') {
+                valA = a.current_count || 0;
+                valB = b.current_count || 0;
+            }
+            return songSortDir === 'desc' ? valB - valA : valA - valB;
+        });
+    } else {
+        filteredSongs = [...filteredSongs].sort((a, b) => {
+            let valA, valB;
+            if (songSortBy === 'spike') {
+                valA = a.daily_growth || 0;
+                valB = b.daily_growth || 0;
+            } else if (songSortBy === 'prev') {
+                valA = a.monthly_growth || 0;
+                valB = b.monthly_growth || 0;
+            } else if (songSortBy === 'curr') {
+                valA = a.current_views || 0;
+                valB = b.current_views || 0;
+            }
+            return songSortDir === 'desc' ? valB - valA : valA - valB;
+        });
+    }
 
     const hot = filteredSongs.slice(0, 100).map(v => ({
         id: v.artist_id,
         song_id: v.song_id,
         title: (v.title || "").split(' (')[0],
         artist: v.artist_name,
-        mult: v.growth_factor ? `${v.growth_factor}x` : '2.1x',
+        mult: v.growth_factor ? `${v.growth_factor}x` : null,
         from: formatNumber(v.previous_count),
         to: formatNumber(v.current_count),
+        daily_growth: v.daily_growth ? `+${formatNumber(v.daily_growth)}` : null,
+        monthly_growth: v.monthly_growth ? `+${formatNumber(v.monthly_growth)}` : null,
+        current_views: v.current_views ? formatNumber(v.current_views) : null,
         ini: getInitials(v.artist_name),
         grad: getGrad(v.artist_id),
         img: v.artist_image || v.thumbnail_url,
@@ -360,13 +384,17 @@ export default function YouTubeDashboard() {
                             <span style={{ fontSize: "12px", fontWeight: 400, color: "rgba(255,255,255,.4)", marginLeft: "6px" }}>({hot.length})</span>
                         </div>
                         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <div style={{ display: "flex", gap: "2px", alignItems: "center", background: "rgba(255,255,255,.05)", borderRadius: "6px", padding: "2px", marginRight: "8px" }}>
+                                <button onClick={() => setLeaderboardMode("viral")} style={{ background: leaderboardMode === "viral" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "viral" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "viral" ? 600 : 400 }}>Viral</button>
+                                <button onClick={() => setLeaderboardMode("growth")} style={{ background: leaderboardMode === "growth" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "growth" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "growth" ? 600 : 400 }}>Growth</button>
+                            </div>
                             <input 
                                 value={songSearch} 
                                 onChange={e => setSongSearch(e.target.value)}
                                 placeholder="Search..."
                                 style={{ background: "rgba(255,255,255,.05)", border: "none", outline: "none", color: "#E9E9F2", fontSize: "12px", padding: "4px 8px", borderRadius: "4px", width: "90px" }}
                             />
-                            {[{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}].map(s => (
+                            {(leaderboardMode === "viral" ? [{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}] : [{k: 'spike', l: '1D'}, {k: 'prev', l: '30D'}, {k: 'curr', l: 'Total'}]).map(s => (
                                 <button key={s.k} onClick={() => {
                                     if (songSortBy === s.k) setSongSortDir(d => d === 'desc' ? 'asc' : 'desc');
                                     else { setSongSortBy(s.k); setSongSortDir('desc'); }
@@ -387,7 +415,7 @@ export default function YouTubeDashboard() {
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Poppins, sans-serif" }}>
                                 <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
                                     <tr>
-                                        {["#", "Track", "Spike", "Pop"].map((h, i) => (
+                                        {(leaderboardMode === "viral" ? ["#", "Track", "Spike", "Pop"] : ["#", "Track", "1-Day", "30-Day", "Total"]).map((h, i) => (
                                             <th
                                                 key={i}
                                                 style={{
@@ -436,13 +464,28 @@ export default function YouTubeDashboard() {
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                                                    <span style={{ background: "rgba(255, 0, 0, 0.15)", color: "var(--yt-red)", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
-                                                        🔥 {h.mult}
-                                                    </span>
+                                                    {leaderboardMode === "viral" ? (
+                                                        <span style={{ background: "rgba(255, 0, 0, 0.15)", color: "var(--yt-red)", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
+                                                            🔥 {h.mult}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: "#5BE08A", fontWeight: 600, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                                                            {h.daily_growth || "—"}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                                                    {h.from} <span style={{ color: "var(--text-muted)", margin: "0 2px" }}>→</span> {h.to}
+                                                    {leaderboardMode === "viral" ? (
+                                                        <>{h.from} <span style={{ color: "var(--text-muted)", margin: "0 2px" }}>→</span> {h.to}</>
+                                                    ) : (
+                                                        <span style={{ color: "var(--text-secondary)" }}>{h.monthly_growth || "—"}</span>
+                                                    )}
                                                 </td>
+                                                {leaderboardMode === "growth" && (
+                                                    <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-primary)", fontWeight: 600, fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                                                        {h.current_views}
+                                                    </td>
+                                                )}
                                             </tr>
                                         );
                                     })}
