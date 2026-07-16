@@ -892,7 +892,7 @@ export default function SpotifyDashboard() {
                       style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s ease", cursor: "pointer" }} 
                       onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"} 
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                      onClick={() => window.location.href = `/spotify/artist/${v.artist_id}`}
+                      onClick={() => window.location.href = `/song/${v.song_id}`}
                     >
                       <td style={{ padding: "10px 12px", fontWeight: 700, width: 40, color: rank <= 3 ? "var(--sp-green)" : "var(--text-muted)", fontSize: rank <= 3 ? "1rem" : "0.85rem" }}>
                         {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : rank}
@@ -950,7 +950,7 @@ export default function SpotifyDashboard() {
                 </h3>
                 <div className="release-grid">
                   {releases.watched.map(r => (
-                    <Link href={`/spotify/artist/${r.artist_id}`} key={r.song_id}>
+                    <Link href={`/song/${r.song_id}`} key={r.song_id}>
                       <div className="release-card">
                         {r.thumbnail_url ? <img src={r.thumbnail_url} alt={r.title} className="release-thumb" /> : <div className="release-thumb" style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem", color: "var(--text-muted)" }}>🎵</div>}
                         <div className="release-body">
@@ -973,7 +973,7 @@ export default function SpotifyDashboard() {
                 </h3>
                 <div className="release-grid">
                   {releases.other.map(r => (
-                    <Link href={`/spotify/artist/${r.artist_id}`} key={r.song_id}>
+                    <Link href={`/song/${r.song_id}`} key={r.song_id}>
                       <div className="release-card">
                         {r.thumbnail_url ? <img src={r.thumbnail_url} alt={r.title} className="release-thumb" /> : <div className="release-thumb" style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem", color: "var(--text-muted)" }}>🎵</div>}
                         <div className="release-body">

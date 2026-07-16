@@ -7,6 +7,7 @@ export default function NavBar() {
   const pathname = usePathname() || "/";
   const youtubeActive = pathname === "/youtube" || pathname.startsWith("/artist/");
   const spotifyActive = pathname === "/spotify" || pathname.startsWith("/spotify/");
+  const compareActive = pathname === "/compare";
 
   return (
     <>
@@ -41,6 +42,12 @@ export default function NavBar() {
               color: spotifyActive ? "#fff" : "rgba(255,255,255,.5)",
               fontWeight: 600, fontSize: "12.5px", cursor: "pointer"
             }}>♫ Spotify</Link>
+            <Link href="/compare" style={{
+              padding: "7px 15px", borderRadius: "8px", textDecoration: "none",
+              background: compareActive ? "#007AFF" : "transparent",
+              color: compareActive ? "#fff" : "rgba(255,255,255,.5)",
+              fontWeight: 600, fontSize: "12.5px", cursor: "pointer"
+            }}>📊 Compare</Link>
           </div>
           <div style={{ flex: 1 }}></div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", font: "600 10px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.4)" }}>

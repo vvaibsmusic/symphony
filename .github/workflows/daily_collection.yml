@@ -15,8 +15,8 @@ jobs:
       - name: Wake up HF Space
         run: |
           echo "Waking up HF Space..."
-          for i in 1 2 3 4 5 6; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://vvaibsmusic-symphony.hf.space/api/stats")
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://vvaibsmusic-symphony.hf.space/api/scheduler/status")
             echo "Attempt $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "✅ Space is awake"
@@ -26,7 +26,7 @@ jobs:
             sleep 30
           done
           if [ "$STATUS" != "200" ]; then
-            echo "❌ Space did not wake up after 6 attempts"
+            echo "❌ Space did not wake up after 10 attempts"
             exit 1
           fi
 

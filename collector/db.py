@@ -95,13 +95,15 @@ def upsert_artist(conn, artist: dict):
 def upsert_song(conn, song: dict):
     """Insert or update a song."""
     conn.execute(
-        """INSERT INTO songs (id, artist_id, title, platform, platform_id, album_name, release_date, thumbnail_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO songs (id, artist_id, title, platform, platform_id, album_name, release_date, thumbnail_url, sentiment_score, sentiment_summary)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(platform, platform_id) DO UPDATE SET
              title=excluded.title,
              album_name=excluded.album_name,
              release_date=excluded.release_date,
-             thumbnail_url=excluded.thumbnail_url""",
+             thumbnail_url=excluded.thumbnail_url,
+             sentiment_score=COALESCE(excluded.sentiment_score, songs.sentiment_score),
+             sentiment_summary=COALESCE(excluded.sentiment_summary, songs.sentiment_summary)""",
         (
             song["id"],
             song["artist_id"],
@@ -111,6 +113,8 @@ def upsert_song(conn, song: dict):
             song.get("album_name"),
             song.get("release_date"),
             song.get("thumbnail_url"),
+            song.get("sentiment_score"),
+            song.get("sentiment_summary"),
         ),
     )
 
@@ -125,12 +129,12 @@ def generate_cycle_id(platform: str = "youtube") -> str:
     return f"{platform}_{ist.strftime('%Y%m%d_%H%M')}"
 
 
-def insert_snapshot(conn, song_id: str, play_count: int, like_count: int, comment_count: int, platform: str, cycle_id: str = None, ytmusic_play_count: int = None):
+def insert_snapshot(conn, song_id: str, play_count: int, like_count: int, dislike_count: int, comment_count: int, platform: str, cycle_id: str = None, ytmusic_play_count: int = None):
     """Record a play count snapshot with optional cycle_id and ytmusic_play_count."""
     conn.execute(
-        """INSERT INTO play_snapshots (song_id, play_count, like_count, comment_count, platform, cycle_id, ytmusic_play_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (song_id, play_count, like_count, comment_count, platform, cycle_id, ytmusic_play_count),
+        """INSERT INTO play_snapshots (song_id, play_count, like_count, dislike_count, comment_count, platform, cycle_id, ytmusic_play_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (song_id, play_count, like_count, dislike_count, comment_count, platform, cycle_id, ytmusic_play_count),
     )
 
 

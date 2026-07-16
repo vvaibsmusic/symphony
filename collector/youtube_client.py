@@ -5,6 +5,7 @@ import json
 import logging
 import datetime
 import time
+import requests
 from traceback import format_exc
 from typing import Optional, List, Dict, Any, Union, cast
 from dotenv import load_dotenv
@@ -239,6 +240,43 @@ class YouTubeClient:
                 print(f"  [yt-data-api] Error fetching stats for batch: {e}")
 
         return stats
+
+    def get_video_dislikes(self, video_id: str) -> int:
+        """Fetch dislikes using the Return YouTube Dislike API."""
+        try:
+            resp = requests.get(f"https://returnyoutubedislikeapi.com/votes?videoId={video_id}", timeout=5)
+            if resp.status_code == 200:
+                return resp.json().get("dislikes", 0)
+        except Exception as e:
+            print(f"  [dislike-api] Error fetching dislikes for {video_id}: {e}")
+        return 0
+
+    def get_video_comments(self, video_id: str, max_results: int = 50) -> list[str]:
+        """Fetch top comments for a video."""
+        if not self.youtube:
+            return []
+        try:
+            yt_api = cast(Any, self.youtube)
+            response = yt_api.commentThreads().list(
+                part="snippet",
+                videoId=video_id,
+                maxResults=max_results,
+                order="relevance",
+                textFormat="plainText"
+            ).execute()
+            
+            comments = []
+            for item in response.get("items", []):
+                snippet = item.get("snippet", {})
+                topLevelComment = snippet.get("topLevelComment", {})
+                comment_text = topLevelComment.get("snippet", {}).get("textDisplay", "")
+                if comment_text:
+                    comments.append(comment_text)
+            return comments
+        except Exception as e:
+            print(f"  [yt-data-api] Error fetching comments for {video_id}: {e}")
+            return []
+
 
     def search_videos_by_query(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
         """Search YouTube for a specific string (e.g., 'Artist Title')"""

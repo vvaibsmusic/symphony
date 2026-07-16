@@ -11,8 +11,15 @@ from typing import Any, Dict, cast
 project_dir = os.path.dirname(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(project_dir, "collector"))
 
-from db import get_connection, init_db, upsert_song, insert_snapshot, get_previous_snapshot, insert_viral_alert, generate_cycle_id
+from db import (
+    get_connection, init_db, upsert_song,
+    insert_snapshot, get_previous_snapshot, insert_viral_alert,
+    generate_cycle_id
+)
 from youtube_client import YouTubeClient
+from spotify_client import SpotifyClient
+from sentiment_analyzer import analyze_comments
+
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(project_dir, ".env"))
@@ -135,6 +142,19 @@ def collect_youtube_data(fast_mode: bool = False):
                 thumbnail = stats.get("thumbnail") or song.get("thumbnail", "")
                 title = stats.get("title") or song.get("title", "Unknown")
 
+                # Fetch extra data (dislikes and sentiment) if it's a new or viral-ish check
+                dislikes = yt.get_video_dislikes(vid)
+                sentiment_score = None
+                sentiment_summary = None
+                
+                if comments > 0:
+                    top_comments = yt.get_video_comments(vid, max_results=20)
+                    if top_comments:
+                        sentiment_data = analyze_comments(top_comments)
+                        sentiment_score = sentiment_data.get("score")
+                        sentiment_summary = sentiment_data.get("summary")
+                        time.sleep(2) # rate limiting for Gemini
+                        
                 # Upsert the song
                 upsert_song(conn, {
                     "id": song_id,
@@ -145,13 +165,15 @@ def collect_youtube_data(fast_mode: bool = False):
                     "album_name": song.get("album"),
                     "release_date": release_date,
                     "thumbnail_url": thumbnail,
+                    "sentiment_score": sentiment_score,
+                    "sentiment_summary": sentiment_summary,
                 })
 
                 # Get previous snapshot for viral detection
                 prev = get_previous_snapshot(conn, song_id, "youtube")
 
                 # Insert new snapshot
-                insert_snapshot(conn, song_id, views, likes, comments, "youtube", cycle_id, ytmusic_play_count=ytmusic_views)
+                insert_snapshot(conn, song_id, views, likes, dislikes, comments, "youtube", cycle_id, ytmusic_play_count=ytmusic_views)
                 total_songs += 1
 
                 # Viral detection

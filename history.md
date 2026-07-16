@@ -4,6 +4,13 @@ Welcome! This document serves as a complete Knowledge Transfer for the "Symphony
 
 ## Development Log
 
+### **Song Analytics, Dislikes, and LLM Sentiment (Current Handoff - July 16, 2026)**
+- **Song Analytics UI**: Created `/song/[id]/page.js` to display deep-dive metrics, including a 7-day Trajectory AreaChart for individual songs. Updated all tables (YouTube Dashboard, Spotify Dashboard, Artist view) to route clicks directly to this new page instead of the artist page.
+- **Backend API**: Added the `/api/songs/{song_id}/history` endpoint in `api/main.py` to serve detailed song metadata, historical snapshots, and viral alerts.
+- **Dislike Tracking**: Integrated the public `Return YouTube Dislike API` inside `collector/youtube_client.py` to fetch dislike counts, extending the `play_snapshots` table schema to store them.
+- **LLM Sentiment Analysis**: Integrated `google-genai` (Gemini 3.5 Flash) via `collector/sentiment_analyzer.py` to fetch top 20 YouTube comments per song and generate a `-1.0` to `1.0` sentiment score and a 1-2 sentence AI summary. (Requires `GEMINI_API_KEY` in `.env`).
+- **Agent Constraints**: Established a hard rule in `.agents/AGENTS.md` and `project-context` skill to strictly ignore all Spotify-related tasks, features, and API requests to focus entirely on YouTube.
+
 ### **Major UI Fixes, SQLite Migration & Simulation (July 15-16, 2026)**
 - **Turso Removed**: Completely stripped all Turso dependencies, environment variables, and `libsql` code. The project now uses purely local SQLite (`db/music_dashboard.db`) due to quota issues and user preference.
 - **Deep Clean**: Purged `collector_go/` and unused files. Simplified the python backend to run everything synchronously via `subprocess` calls.

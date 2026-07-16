@@ -177,14 +177,16 @@ export default function ArtistDetail() {
             <div style={{ marginTop: "28px", display: "flex", alignItems: "center", gap: "8px" }}><span style={{ fontSize: "16px" }}>🔥</span><span style={{ fontWeight: 600, fontSize: "16px" }}>Viral Alerts</span></div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "14px", marginTop: "12px" }}>
                 {viral_alerts.length > 0 ? viral_alerts.slice(0, 9).map((v, i) => (
-                    <div key={i} style={{ background: "#14141F", border: "1px solid rgba(255,82,56,.18)", borderRadius: "13px", padding: "15px 16px" }}>
-                        <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.title || "Unknown Song"}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "9px", marginTop: "9px" }}>
-                            <span style={{ background: "rgba(255,82,56,.16)", color: "#FF6A52", font: "700 12px ui-monospace,Menlo,monospace", padding: "4px 9px", borderRadius: "7px" }}>▲ {v.growth_factor ? `${v.growth_factor}x` : '—'}</span>
-                            <span style={{ font: "600 11px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.5)" }}>{formatNumber(v.previous_count)} → {formatNumber(v.current_count)}</span>
+                    <Link href={`/song/${v.song_id}`} key={i} style={{ textDecoration: 'none', color: 'inherit' }}>
+                        <div style={{ background: "#14141F", border: "1px solid rgba(255,82,56,.18)", borderRadius: "13px", padding: "15px 16px", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,82,56,.05)'} onMouseOut={e => e.currentTarget.style.background = '#14141F'}>
+                            <div style={{ fontWeight: 600, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.title || "Unknown Song"}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px", marginTop: "9px" }}>
+                                <span style={{ background: "rgba(255,82,56,.16)", color: "#FF6A52", font: "700 12px ui-monospace,Menlo,monospace", padding: "4px 9px", borderRadius: "7px" }}>▲ {v.growth_factor ? `${v.growth_factor}x` : '—'}</span>
+                                <span style={{ font: "600 11px ui-monospace,Menlo,monospace", color: "rgba(255,255,255,.5)" }}>{formatNumber(v.previous_count)} → {formatNumber(v.current_count)}</span>
+                            </div>
+                            <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,.35)", marginTop: "9px", fontFamily: "ui-monospace,Menlo,monospace" }}>{formatDateTime(v.detected_at)}</div>
                         </div>
-                        <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,.35)", marginTop: "9px", fontFamily: "ui-monospace,Menlo,monospace" }}>{formatDateTime(v.detected_at)}</div>
-                    </div>
+                    </Link>
                 )) : (
                     <div style={{ gridColumn: "1 / -1", padding: "20px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "13px", color: "rgba(255,255,255,.4)", fontSize: "13px", textAlign: "center" }}>
                         No viral alerts recorded yet for this artist.
@@ -206,7 +208,7 @@ export default function ArtistDetail() {
                         <div style={{ fontFamily: "ui-monospace,Menlo,monospace", fontSize: "12px", color: "rgba(255,255,255,.4)" }}>{i + 1}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "11px", minWidth: 0 }}>
                             <div style={{ width: "38px", height: "26px", borderRadius: "5px", background: getGrad(t.id), flex: "none", backgroundImage: t.thumbnail_url ? `url(${t.thumbnail_url})` : "none", backgroundSize: "cover", backgroundPosition: "center" }}></div>
-                            <div style={{ fontWeight: 500, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={t.title}>{t.title}</div>
+                            <Link href={`/song/${t.id}`} style={{ fontWeight: 500, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "inherit", textDecoration: "none" }} title={t.title}>{t.title}</Link>
                         </div>
                         <div style={{ fontSize: "12px", color: "rgba(255,255,255,.5)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={t.album_name || "Single"}>{t.album_name || "Single"}</div>
                         <div style={{ textAlign: "right", fontFamily: "ui-monospace,Menlo,monospace", fontSize: "13px", fontWeight: 600, color: "#FF6A52" }}>{formatNumber(t.latest_play_count)}</div>

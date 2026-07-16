@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS songs (
   album_name TEXT,
   release_date TEXT,
   thumbnail_url TEXT,
+  sentiment_score REAL,
+  sentiment_summary TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(platform, platform_id)
 );
@@ -29,6 +31,7 @@ CREATE TABLE IF NOT EXISTS play_snapshots (
   collected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   play_count INTEGER,
   like_count INTEGER DEFAULT 0,
+  dislike_count INTEGER DEFAULT 0,
   comment_count INTEGER DEFAULT 0,
   ytmusic_play_count INTEGER,
   platform TEXT NOT NULL,

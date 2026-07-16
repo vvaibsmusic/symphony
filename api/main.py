@@ -1643,6 +1643,44 @@ def collect_status(artist_id: str):
     return state
 
 
+@app.get("/api/songs/{song_id}/history")
+@ttl_cache(60)
+def get_song_history(song_id: str):
+    """Get the full history and details of a song."""
+    conn = get_connection()
+    
+    song = conn.execute(
+        "SELECT s.*, a.name as artist_name, a.image_url as artist_image FROM songs s JOIN artists a ON s.artist_id = a.id WHERE s.id = ?",
+        (song_id,)
+    ).fetchone()
+    
+    if not song:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Song not found")
+        
+    snapshots = conn.execute("""
+        SELECT collected_at, play_count, like_count, dislike_count, comment_count, platform 
+        FROM play_snapshots 
+        WHERE song_id = ? 
+        ORDER BY collected_at ASC
+    """, (song_id,)).fetchall()
+    
+    alerts = conn.execute("""
+        SELECT detected_at, previous_count, current_count, growth_factor, platform
+        FROM viral_alerts
+        WHERE song_id = ?
+        ORDER BY detected_at DESC
+    """, (song_id,)).fetchall()
+    
+    conn.close()
+    
+    return {
+        "song": dict(song),
+        "history": [dict(s) for s in snapshots],
+        "alerts": [dict(a) for a in alerts]
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

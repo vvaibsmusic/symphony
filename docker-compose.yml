@@ -1,0 +1,11 @@
+services:
+  symphony:
+    build:
+      context: .
+      dockerfile: Dockerfile.oracle
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7860:7860"
+    env_file: .env.oracle
+    volumes:
+      - ./data:/app/db

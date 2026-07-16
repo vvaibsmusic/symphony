@@ -195,6 +195,7 @@ export default function YouTubeDashboard() {
 
     const hot = filteredSongs.slice(0, 100).map(v => ({
         id: v.artist_id,
+        song_id: v.song_id,
         title: (v.title || "").split(' (')[0],
         artist: v.artist_name,
         mult: v.growth_factor ? `${v.growth_factor}x` : '2.1x',
@@ -208,6 +209,7 @@ export default function YouTubeDashboard() {
 
     const fresh = releases.slice(0, 5).map(r => ({
         id: r.artist_id,
+        song_id: r.song_id,
         title: (r.title || "").split(' (')[0],
         artist: r.artist_name,
         date: formatDate(r.release_date),
@@ -415,7 +417,7 @@ export default function YouTubeDashboard() {
                                                 style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s ease", cursor: "pointer" }} 
                                                 onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"} 
                                                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                                                onClick={() => window.location.href = `/artist/${h.id}`}
+                                                onClick={() => window.location.href = `/song/${h.song_id}`}
                                             >
                                                 <td style={{ padding: "10px 12px", fontWeight: 700, width: 40, color: rank <= 3 ? "var(--yt-red)" : "var(--text-muted)", fontSize: rank <= 3 ? "1rem" : "0.85rem" }}>
                                                     {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : rank}
@@ -460,7 +462,7 @@ export default function YouTubeDashboard() {
                     </div>
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "auto", maxHeight: "350px" }}>
                         {fresh.length > 0 ? fresh.map((n, idx) => (
-                            <Link href={`/artist/${n.id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                            <Link href={`/song/${n.song_id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                                 {n.img ? (
                                     <img src={n.img} alt="" style={{ width: 42, height: 42, borderRadius: 9, objectFit: "cover", flex: "none" }} />
                                 ) : (
