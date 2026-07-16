@@ -410,7 +410,7 @@ export default function YouTubeDashboard() {
                             ))}
                         </div>
                     </div>
-                    <div style={{ maxHeight: "500px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "auto" }}>
+                    <div style={{ maxHeight: "500px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflowY: "auto", overflowX: "hidden" }}>
                         {hot.length > 0 ? (
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Poppins, sans-serif" }}>
                                 <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
@@ -503,7 +503,7 @@ export default function YouTubeDashboard() {
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><span style={{ fontSize: "16px" }}>🆕</span><span style={{ fontWeight: 600, fontSize: "16px" }}>What's New</span></div>
                         <span style={{ font: "500 10px Poppins, sans-serif", color: "rgba(255,255,255,.4)", letterSpacing: ".5px" }}>PAST 7 DAYS</span>
                     </div>
-                    <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflow: "auto", maxHeight: "500px" }}>
+                    <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflowY: "auto", overflowX: "hidden", maxHeight: "500px" }}>
                         {fresh.length > 0 ? fresh.map((n, idx) => (
                             <Link href={`/song/${n.song_id}`} key={idx} style={{ display: "flex", alignItems: "center", gap: "13px", padding: "12px 16px", borderTop: idx > 0 ? "1px solid rgba(255,255,255,.05)" : "none", textDecoration: "none", color: "inherit", cursor: "pointer", transition: "background 0.2s" }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                                 {n.img ? (

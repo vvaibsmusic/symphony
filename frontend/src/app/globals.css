@@ -42,6 +42,9 @@
     margin-top: 30px;
     align-items: start;
 }
+.symphony-two-up-grid > div {
+    min-width: 0;
+}
 
 .symphony-navbar-inner {
     max-width: 1200px;
