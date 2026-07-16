@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
@@ -16,8 +17,9 @@ function formatNumber(num) {
   return sign + abs;
 }
 
-export default function SongAnalyticsPage({ params }) {
-  const { id } = use(params);
+export default function SongAnalyticsPage() {
+  const params = useParams();
+  const id = params?.id;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
