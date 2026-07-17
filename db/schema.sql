@@ -49,6 +49,15 @@ CREATE TABLE IF NOT EXISTS viral_alerts (
   status TEXT DEFAULT 'new'
 );
 
+CREATE TABLE IF NOT EXISTS viral_predictions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  song_id TEXT REFERENCES songs(id),
+  prediction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+  is_viral_candidate BOOLEAN,
+  confidence_score REAL,
+  reasoning TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(artist_id);
 CREATE INDEX IF NOT EXISTS idx_songs_platform ON songs(platform);
 CREATE INDEX IF NOT EXISTS idx_snapshots_song ON play_snapshots(song_id, collected_at);

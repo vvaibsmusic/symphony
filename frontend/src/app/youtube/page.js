@@ -119,6 +119,8 @@ export default function YouTubeDashboard() {
             setGrowth(growthRes.growth || []);
             const releasesRes = await fetch(`${API}/api/watchlist/releases?days=30`).then(r => r.json()).catch(() => ({ watched: [], other: [] }));
             setReleases([...(releasesRes.watched || []), ...(releasesRes.other || [])]);
+            const predRes = await fetch(`${API}/api/predictions?limit=10`).then(r => r.json()).catch(() => ({ predictions: [] }));
+            setPredictions(predRes.predictions || []);
             const quotaRes = await fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null);
             setQuota(quotaRes || null);
         } catch (e) {
@@ -348,6 +350,13 @@ export default function YouTubeDashboard() {
                         <button style={{ background: "transparent", border: "1px solid rgba(52,199,89,.4)", color: "#5BE08A", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
                             ⌕ Find new songs
                         </button>
+                        <button onClick={async () => {
+                            setRefreshing(true);
+                            await fetch(`${API}/api/refresh/predictions`, { method: "POST" });
+                            setTimeout(() => { setRefreshing(false); fetchData(); }, 5000);
+                        }} style={{ background: "transparent", border: "1px solid rgba(255,106,82,.4)", color: "#FF6A52", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            ✨ Run Predictions
+                        </button>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "9px", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "9px", padding: "7px 12px" }}>
                         <span style={{ font: "600 10px Poppins, sans-serif", color: "rgba(255,255,255,.45)", letterSpacing: ".5px" }}>API QUOTA</span>
@@ -387,6 +396,7 @@ export default function YouTubeDashboard() {
                             <div style={{ display: "flex", gap: "2px", alignItems: "center", background: "rgba(255,255,255,.05)", borderRadius: "6px", padding: "2px", marginRight: "8px" }}>
                                 <button onClick={() => setLeaderboardMode("viral")} style={{ background: leaderboardMode === "viral" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "viral" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "viral" ? 600 : 400 }}>Viral</button>
                                 <button onClick={() => setLeaderboardMode("growth")} style={{ background: leaderboardMode === "growth" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "growth" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "growth" ? 600 : 400 }}>Growth</button>
+                                <button onClick={() => setLeaderboardMode("predictions")} style={{ background: leaderboardMode === "predictions" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "predictions" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "predictions" ? 600 : 400 }}>AI Preds</button>
                             </div>
                             <input 
                                 value={songSearch} 
@@ -394,7 +404,7 @@ export default function YouTubeDashboard() {
                                 placeholder="Search..."
                                 style={{ background: "rgba(255,255,255,.05)", border: "none", outline: "none", color: "#E9E9F2", fontSize: "12px", padding: "4px 8px", borderRadius: "4px", width: "90px" }}
                             />
-                            {(leaderboardMode === "viral" ? [{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}] : [{k: 'spike', l: '1D'}, {k: 'prev', l: '30D'}, {k: 'curr', l: 'Total'}]).map(s => (
+                            {(leaderboardMode === "viral" ? [{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}] : leaderboardMode === "growth" ? [{k: 'spike', l: '1D'}, {k: 'prev', l: '30D'}, {k: 'curr', l: 'Total'}] : [{k: 'conf', l: 'Conf'}]).map(s => (
                                 <button key={s.k} onClick={() => {
                                     if (songSortBy === s.k) setSongSortDir(d => d === 'desc' ? 'asc' : 'desc');
                                     else { setSongSortBy(s.k); setSongSortDir('desc'); }
@@ -415,7 +425,7 @@ export default function YouTubeDashboard() {
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Poppins, sans-serif" }}>
                                 <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
                                     <tr>
-                                        {(leaderboardMode === "viral" ? ["#", "Track", "Spike", "Pop"] : ["#", "Track", "1-Day", "30-Day", "Total"]).map((h, i) => (
+                                        {(leaderboardMode === "viral" ? ["#", "Track", "Spike", "Views"] : leaderboardMode === "growth" ? ["#", "Track", "1-Day", "30-Day", "Total"] : ["#", "Track", "Viral", "Conf", "Reason"]).map((h, i) => (
                                             <th
                                                 key={i}
                                                 style={{
@@ -468,6 +478,10 @@ export default function YouTubeDashboard() {
                                                         <span style={{ background: "rgba(255, 0, 0, 0.15)", color: "var(--yt-red)", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
                                                             🔥 {h.mult}
                                                         </span>
+                                                    ) : leaderboardMode === "predictions" ? (
+                                                        <span style={{ color: "var(--yt-red)", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                                                            {h.from}
+                                                        </span>
                                                     ) : (
                                                         <span style={{ color: "#5BE08A", fontWeight: 600, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                             {h.daily_growth || "—"}
@@ -477,6 +491,8 @@ export default function YouTubeDashboard() {
                                                 <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                     {leaderboardMode === "viral" ? (
                                                         <>{h.from} <span style={{ color: "var(--text-muted)", margin: "0 2px" }}>→</span> {h.to}</>
+                                                    ) : leaderboardMode === "predictions" ? (
+                                                        <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{h.mult}</span>
                                                     ) : (
                                                         <span style={{ color: "var(--text-secondary)" }}>{h.monthly_growth || "—"}</span>
                                                     )}
@@ -484,6 +500,11 @@ export default function YouTubeDashboard() {
                                                 {leaderboardMode === "growth" && (
                                                     <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-primary)", fontWeight: 600, fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                         {h.current_views}
+                                                    </td>
+                                                )}
+                                                {leaderboardMode === "predictions" && (
+                                                    <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontSize: "0.75rem", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={h.to}>
+                                                        {h.to}
                                                     </td>
                                                 )}
                                             </tr>

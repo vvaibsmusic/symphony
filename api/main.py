@@ -227,7 +227,7 @@ def start_collector_process(script_name: str, run_type: str):
         except Exception as e:
             print(f"[refresh:{run_type}] Error: {e}")
         finally:
-            if run_type in ["discover", "stats", "daily_auto"]:
+            if run_type in ["discover", "stats", "daily_auto", "predictions"]:
                 try:
                     upload_db()
                 except Exception as e:
@@ -278,6 +278,12 @@ def trigger_refresh_spotify_stats():
 def trigger_refresh_spotify_discover():
     """Discover Spotify songs for all artists with spotify_id."""
     return start_collector_process("collect_spotify.py", "spotify_discover")
+
+
+@app.post("/api/refresh/predictions")
+def trigger_refresh_predictions():
+    """Run LangChain viral prediction engine."""
+    return start_collector_process("predictor.py", "predictions")
 
 
 @app.get("/api/refresh/status")
@@ -861,6 +867,32 @@ def get_spotify_viral(limit: int = Query(20, ge=1, le=100)):
     result = enrich_viral_alerts_batch(conn, [dict(r) for r in rows], "spotify")
     conn.close()
     return {"viral": result}
+
+@app.get("/api/predictions")
+def get_predictions(limit: int = 12):
+    """Get the latest LangChain viral predictions."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT 
+            vp.id,
+            vp.prediction_date,
+            vp.is_viral_candidate,
+            vp.confidence_score,
+            vp.reasoning,
+            s.title,
+            s.platform_id as track_id,
+            s.thumbnail_url,
+            a.name as artist_name,
+            a.id as artist_id,
+            a.image_url as artist_image
+        FROM viral_predictions vp
+        JOIN songs s ON vp.song_id = s.id
+        JOIN artists a ON s.artist_id = a.id
+        ORDER BY vp.prediction_date DESC, vp.confidence_score DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return {"predictions": [dict(r) for r in rows]}
 
 
 # ─── Watchlist New Releases ─────────────────────────────────
