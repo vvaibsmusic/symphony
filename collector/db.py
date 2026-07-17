@@ -49,6 +49,14 @@ def init_db():
         conn.commit()
         print("[migration] Added dislike_count to play_snapshots")
 
+    # Migration: add sentiment columns to songs if missing
+    song_cols = [row["name"] for row in conn.execute("PRAGMA table_info(songs)").fetchall()]
+    if "sentiment_score" not in song_cols:
+        conn.execute("ALTER TABLE songs ADD COLUMN sentiment_score REAL")
+        conn.execute("ALTER TABLE songs ADD COLUMN sentiment_summary TEXT")
+        conn.commit()
+        print("[migration] Added sentiment columns to songs")
+
     # Composite indexes for the dashboard's hot queries (latest snapshot per
     # song by platform, songs by artist+platform, alerts by platform)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_platform_song ON play_snapshots(platform, song_id, id)")
