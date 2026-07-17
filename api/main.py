@@ -762,7 +762,7 @@ def get_youtube_viral(limit: int = Query(100, ge=1, le=1000)):
         FROM viral_alerts va
         JOIN songs s ON va.song_id = s.id
         JOIN artists a ON s.artist_id = a.id
-        WHERE va.platform = 'youtube'
+        WHERE va.platform = 'youtube' AND va.detected_at >= datetime('now', '-30 days')
         ORDER BY va.growth_factor DESC, va.detected_at DESC
         LIMIT ?
     """, (limit,)).fetchall()
@@ -854,7 +854,7 @@ def get_spotify_viral(limit: int = Query(20, ge=1, le=100)):
         FROM viral_alerts va
         JOIN songs s ON va.song_id = s.id
         JOIN artists a ON s.artist_id = a.id
-        WHERE va.platform = 'spotify'
+        WHERE va.platform = 'spotify' AND va.detected_at >= datetime('now', '-30 days')
         ORDER BY popularity_delta DESC, va.detected_at DESC
         LIMIT ?
     """, (limit,)).fetchall()
