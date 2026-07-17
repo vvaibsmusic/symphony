@@ -43,6 +43,12 @@ def init_db():
         conn.commit()
         print("[migration] Added ytmusic_play_count to play_snapshots")
 
+    # Migration: add dislike_count if missing
+    if "dislike_count" not in cols:
+        conn.execute("ALTER TABLE play_snapshots ADD COLUMN dislike_count INTEGER DEFAULT 0")
+        conn.commit()
+        print("[migration] Added dislike_count to play_snapshots")
+
     # Composite indexes for the dashboard's hot queries (latest snapshot per
     # song by platform, songs by artist+platform, alerts by platform)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_platform_song ON play_snapshots(platform, song_id, id)")
