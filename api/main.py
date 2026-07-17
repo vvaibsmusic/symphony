@@ -227,7 +227,7 @@ def start_collector_process(script_name: str, run_type: str):
         except Exception as e:
             print(f"[refresh:{run_type}] Error: {e}")
         finally:
-            if run_type != "simulation":
+            if run_type in ["discover", "stats", "daily_auto"]:
                 try:
                     upload_db()
                 except Exception as e:
@@ -1458,8 +1458,8 @@ def get_quota():
 
     conn.close()
     return {
-        "daily_limit": DAILY_LIMIT,
-        "used_today": used,
+        "limit": DAILY_LIMIT,
+        "used": used,
         "remaining": max(DAILY_LIMIT - used, 0),
         "pct_used": round(used / DAILY_LIMIT * 100, 1),
         "breakdown": rows_to_list(breakdown),
