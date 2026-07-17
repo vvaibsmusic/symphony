@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from db import get_connection, init_db
 from cache import ttl_cache, invalidate_cache
+from sync import download_db, upload_db
 from metrics import (
     compute_artist_metrics,
     compute_artist_metrics_from_history,
@@ -143,6 +144,7 @@ def refresh_cache():
 
 @app.on_event("startup")
 async def startup():
+    download_db()
     init_db()
     # Start the daily scheduler in background
     asyncio.create_task(_daily_refresh_loop())
@@ -225,6 +227,11 @@ def start_collector_process(script_name: str, run_type: str):
         except Exception as e:
             print(f"[refresh:{run_type}] Error: {e}")
         finally:
+            if run_type != "simulation":
+                try:
+                    upload_db()
+                except Exception as e:
+                    print(f"[refresh:{run_type}] Failed to upload DB: {e}")
             _collector_state["running"] = False
             _collector_state["pid"] = None
             _collector_state["type"] = None
