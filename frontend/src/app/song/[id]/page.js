@@ -24,6 +24,8 @@ export default function SongAnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!id) return;
+    setLoading(true);
     fetch(`${API}/api/songs/${id}/history`)
       .then(res => res.json())
       .then(resData => {

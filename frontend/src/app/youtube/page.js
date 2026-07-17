@@ -117,7 +117,7 @@ export default function YouTubeDashboard() {
             setViral(viralRes.viral || []);
             const growthRes = await fetch(`${API}/api/youtube/growth?limit=100`).then(r => r.json()).catch(() => ({ growth: [] }));
             setGrowth(growthRes.growth || []);
-            const releasesRes = await fetch(`${API}/api/watchlist/releases`).then(r => r.json()).catch(() => ({ watched: [], other: [] }));
+            const releasesRes = await fetch(`${API}/api/watchlist/releases?days=30`).then(r => r.json()).catch(() => ({ watched: [], other: [] }));
             setReleases([...(releasesRes.watched || []), ...(releasesRes.other || [])]);
             const quotaRes = await fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null);
             setQuota(quotaRes || null);
@@ -501,7 +501,7 @@ export default function YouTubeDashboard() {
                 <div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><span style={{ fontSize: "16px" }}>🆕</span><span style={{ fontWeight: 600, fontSize: "16px" }}>What's New</span></div>
-                        <span style={{ font: "500 10px Poppins, sans-serif", color: "rgba(255,255,255,.4)", letterSpacing: ".5px" }}>PAST 7 DAYS</span>
+                        <span style={{ font: "500 10px Poppins, sans-serif", color: "rgba(255,255,255,.4)", letterSpacing: ".5px" }}>PAST 30 DAYS</span>
                     </div>
                     <div style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", overflowY: "auto", overflowX: "hidden", maxHeight: "500px" }}>
                         {fresh.length > 0 ? fresh.map((n, idx) => (
