@@ -770,23 +770,23 @@ def get_youtube_growth(limit: int = Query(100, ge=1, le=1000)):
     """Get songs sorted by absolute volume growth over 24h and 30d."""
     conn = get_connection()
     rows = conn.execute("""
-        WITH Latest AS (
+        WITH RankedSnapshots AS (
             SELECT song_id, play_count, collected_at,
                    ROW_NUMBER() OVER(PARTITION BY song_id ORDER BY collected_at DESC) as rn
             FROM play_snapshots
             WHERE platform = 'youtube'
         ),
-        Yesterday AS (
-            SELECT song_id, play_count, collected_at,
-                   ROW_NUMBER() OVER(PARTITION BY song_id ORDER BY ABS(julianday(collected_at) - julianday(datetime('now', '-1 day')))) as rn
-            FROM play_snapshots
-            WHERE platform = 'youtube' AND collected_at <= datetime('now', '-20 hours')
-        ),
-        LastMonth AS (
-            SELECT song_id, play_count, collected_at,
-                   ROW_NUMBER() OVER(PARTITION BY song_id ORDER BY ABS(julianday(collected_at) - julianday(datetime('now', '-30 days')))) as rn
-            FROM play_snapshots
-            WHERE platform = 'youtube' AND collected_at <= datetime('now', '-25 days')
+        GrowthData AS (
+            SELECT 
+                r1.song_id,
+                r1.play_count as current_views,
+                r2.play_count as previous_views,
+                r1.collected_at as current_time,
+                r2.collected_at as previous_time,
+                (julianday(r1.collected_at) - julianday(r2.collected_at)) as diff_days
+            FROM RankedSnapshots r1
+            LEFT JOIN RankedSnapshots r2 ON r1.song_id = r2.song_id AND r2.rn = 2
+            WHERE r1.rn = 1
         )
         SELECT 
             s.id as song_id,
@@ -798,16 +798,20 @@ def get_youtube_growth(limit: int = Query(100, ge=1, le=1000)):
             a.name as artist_name,
             a.id as artist_id,
             a.image_url as artist_image,
-            l.play_count as current_views,
-            y.play_count as yesterday_views,
-            m.play_count as last_month_views,
-            (l.play_count - COALESCE(y.play_count, l.play_count)) as daily_growth,
-            (l.play_count - COALESCE(m.play_count, l.play_count)) as monthly_growth
+            g.current_views as current_views,
+            CASE 
+                WHEN g.previous_views IS NOT NULL AND g.diff_days > 0 
+                THEN CAST(ROUND((g.current_views - g.previous_views) / g.diff_days) AS INTEGER)
+                ELSE 0 
+            END as daily_growth,
+            CASE 
+                WHEN g.previous_views IS NOT NULL AND g.diff_days > 0 
+                THEN CAST(ROUND(((g.current_views - g.previous_views) / g.diff_days) * 30) AS INTEGER)
+                ELSE 0 
+            END as monthly_growth
         FROM songs s
+        JOIN GrowthData g ON s.id = g.song_id
         JOIN artists a ON s.artist_id = a.id
-        JOIN Latest l ON s.id = l.song_id AND l.rn = 1
-        LEFT JOIN Yesterday y ON s.id = y.song_id AND y.rn = 1
-        LEFT JOIN LastMonth m ON s.id = m.song_id AND m.rn = 1
         WHERE s.platform = 'youtube'
         ORDER BY daily_growth DESC
         LIMIT ?
