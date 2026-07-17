@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS songs (
   thumbnail_url TEXT,
   sentiment_score REAL,
   sentiment_summary TEXT,
+  themes TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(platform, platform_id)
 );
@@ -56,6 +57,16 @@ CREATE TABLE IF NOT EXISTS viral_predictions (
   is_viral_candidate BOOLEAN,
   confidence_score REAL,
   reasoning TEXT
+);
+
+CREATE TABLE IF NOT EXISTS suggested_artists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  reason TEXT,
+  source TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(name)
 );
 
 CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(artist_id);

@@ -72,6 +72,8 @@ export default function YouTubeDashboard() {
     const [songSortBy, setSongSortBy] = useState("spike");
     const [songSortDir, setSongSortDir] = useState("desc");
     
+    const [suggestions, setSuggestions] = useState([]);
+    
     // pagination state (keeping for api compatibility, though new design looks single-page)
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -119,8 +121,6 @@ export default function YouTubeDashboard() {
             setGrowth(growthRes.growth || []);
             const releasesRes = await fetch(`${API}/api/watchlist/releases?days=30`).then(r => r.json()).catch(() => ({ watched: [], other: [] }));
             setReleases([...(releasesRes.watched || []), ...(releasesRes.other || [])]);
-            const predRes = await fetch(`${API}/api/predictions?limit=10`).then(r => r.json()).catch(() => ({ predictions: [] }));
-            setPredictions(predRes.predictions || []);
             const quotaRes = await fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null);
             setQuota(quotaRes || null);
         } catch (e) {
@@ -146,7 +146,14 @@ export default function YouTubeDashboard() {
         setLoading(false);
     }, [page, search, sortBy, sortDir, favOnly, genreFilter, regionFilter]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    const fetchSuggestions = useCallback(async () => {
+        try {
+            const data = await fetch(`${API}/api/discovery/suggested`).then(res => res.json()).catch(() => ({ suggestions: [] }));
+            setSuggestions(data.suggestions || []);
+        } catch (e) { console.error(e); }
+    }, []);
+
+    useEffect(() => { fetchData(); fetchSuggestions(); }, [fetchData, fetchSuggestions]);
     useEffect(() => { fetchArtists(); }, [fetchArtists]);
 
     const handleRefresh = async () => {
@@ -347,14 +354,19 @@ export default function YouTubeDashboard() {
                         <button onClick={handleRefresh} disabled={refreshing} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.14)", color: "#E9E9F2", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap", opacity: refreshing ? 0.5 : 1 }}>
                             {refreshing ? "↻ Refreshing..." : "↻ Refresh stats"}
                         </button>
-                        <button style={{ background: "transparent", border: "1px solid rgba(52,199,89,.4)", color: "#5BE08A", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
-                            ⌕ Find new songs
+                        <button 
+                            onClick={async () => {
+                                await fetch(`${API}/api/refresh/discovery`, { method: "POST" });
+                                alert("Discovery Agent is now running in the background. It will find new artists and update the suggestions list shortly.");
+                            }} 
+                            style={{ background: "rgba(91, 224, 138, 0.1)", color: "#5BE08A", border: "1px solid rgba(91, 224, 138, 0.3)", padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
+                            🔍 Run A&R Agent
                         </button>
                         <button onClick={async () => {
                             setRefreshing(true);
                             await fetch(`${API}/api/refresh/predictions`, { method: "POST" });
                             setTimeout(() => { setRefreshing(false); fetchData(); }, 5000);
-                        }} style={{ background: "transparent", border: "1px solid rgba(255,106,82,.4)", color: "#FF6A52", padding: "9px 14px", borderRadius: "9px", font: "600 12px Poppins, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
+                        }} style={{ background: "rgba(229, 9, 20, 0.1)", color: "#FF6A52", border: "1px solid rgba(229, 9, 20, 0.3)", padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
                             ✨ Run Predictions
                         </button>
                     </div>
@@ -396,7 +408,6 @@ export default function YouTubeDashboard() {
                             <div style={{ display: "flex", gap: "2px", alignItems: "center", background: "rgba(255,255,255,.05)", borderRadius: "6px", padding: "2px", marginRight: "8px" }}>
                                 <button onClick={() => setLeaderboardMode("viral")} style={{ background: leaderboardMode === "viral" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "viral" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "viral" ? 600 : 400 }}>Viral</button>
                                 <button onClick={() => setLeaderboardMode("growth")} style={{ background: leaderboardMode === "growth" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "growth" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "growth" ? 600 : 400 }}>Growth</button>
-                                <button onClick={() => setLeaderboardMode("predictions")} style={{ background: leaderboardMode === "predictions" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "predictions" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "predictions" ? 600 : 400 }}>AI Preds</button>
                             </div>
                             <input 
                                 value={songSearch} 
@@ -404,7 +415,7 @@ export default function YouTubeDashboard() {
                                 placeholder="Search..."
                                 style={{ background: "rgba(255,255,255,.05)", border: "none", outline: "none", color: "#E9E9F2", fontSize: "12px", padding: "4px 8px", borderRadius: "4px", width: "90px" }}
                             />
-                            {(leaderboardMode === "viral" ? [{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}] : leaderboardMode === "growth" ? [{k: 'spike', l: '1D'}, {k: 'prev', l: '30D'}, {k: 'curr', l: 'Total'}] : [{k: 'conf', l: 'Conf'}]).map(s => (
+                            {(leaderboardMode === "viral" ? [{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}] : [{k: 'spike', l: '1D'}, {k: 'prev', l: '30D'}, {k: 'curr', l: 'Total'}]).map(s => (
                                 <button key={s.k} onClick={() => {
                                     if (songSortBy === s.k) setSongSortDir(d => d === 'desc' ? 'asc' : 'desc');
                                     else { setSongSortBy(s.k); setSongSortDir('desc'); }
@@ -425,7 +436,7 @@ export default function YouTubeDashboard() {
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Poppins, sans-serif" }}>
                                 <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
                                     <tr>
-                                        {(leaderboardMode === "viral" ? ["#", "Track", "Spike", "Views"] : leaderboardMode === "growth" ? ["#", "Track", "1-Day", "30-Day", "Total"] : ["#", "Track", "Viral", "Conf", "Reason"]).map((h, i) => (
+                                        {(leaderboardMode === "viral" ? ["#", "Track", "Spike", "Views"] : ["#", "Track", "1-Day", "30-Day", "Total"]).map((h, i) => (
                                             <th
                                                 key={i}
                                                 style={{
@@ -478,10 +489,6 @@ export default function YouTubeDashboard() {
                                                         <span style={{ background: "rgba(255, 0, 0, 0.15)", color: "var(--yt-red)", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
                                                             🔥 {h.mult}
                                                         </span>
-                                                    ) : leaderboardMode === "predictions" ? (
-                                                        <span style={{ color: "var(--yt-red)", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                                                            {h.from}
-                                                        </span>
                                                     ) : (
                                                         <span style={{ color: "#5BE08A", fontWeight: 600, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                             {h.daily_growth || "—"}
@@ -491,8 +498,6 @@ export default function YouTubeDashboard() {
                                                 <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                     {leaderboardMode === "viral" ? (
                                                         <>{h.from} <span style={{ color: "var(--text-muted)", margin: "0 2px" }}>→</span> {h.to}</>
-                                                    ) : leaderboardMode === "predictions" ? (
-                                                        <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{h.mult}</span>
                                                     ) : (
                                                         <span style={{ color: "var(--text-secondary)" }}>{h.monthly_growth || "—"}</span>
                                                     )}
@@ -500,11 +505,6 @@ export default function YouTubeDashboard() {
                                                 {leaderboardMode === "growth" && (
                                                     <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-primary)", fontWeight: 600, fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                         {h.current_views}
-                                                    </td>
-                                                )}
-                                                {leaderboardMode === "predictions" && (
-                                                    <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontSize: "0.75rem", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={h.to}>
-                                                        {h.to}
                                                     </td>
                                                 )}
                                             </tr>
@@ -542,6 +542,45 @@ export default function YouTubeDashboard() {
                             <div style={{ padding: "16px", textAlign: "center", color: "rgba(255,255,255,.4)", fontSize: "13px" }}>No recent releases found.</div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* A&R Discovery Section */}
+            <div style={{ marginTop: "24px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "16px" }}>🔍</span><span style={{ fontWeight: 600, fontSize: "16px", marginLeft: "4px" }}>A&R Discovery Agent</span>
+                        <span style={{ fontSize: "12px", fontWeight: 400, color: "rgba(255,255,255,.4)", marginLeft: "6px" }}>({suggestions.length} Pending)</span>
+                    </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                    {suggestions.map(s => (
+                        <div key={s.id} style={{ background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                            <div>
+                                <div style={{ fontSize: "16px", fontWeight: 700, color: "#FFF", marginBottom: "4px" }}>{s.name}</div>
+                                <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Source: {s.source}</div>
+                            </div>
+                            <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.8)", lineHeight: "1.5" }}>
+                                {s.reason}
+                            </div>
+                            <div style={{ display: "flex", gap: "8px", marginTop: "auto" }}>
+                                <button onClick={async () => {
+                                    await fetch(`${API}/api/discovery/suggested/${s.id}/approve`, { method: "POST" });
+                                    fetchSuggestions();
+                                    fetchArtists();
+                                }} style={{ flex: 1, background: "rgba(52,199,89,0.1)", color: "#34C759", border: "1px solid rgba(52,199,89,0.3)", padding: "6px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>Approve</button>
+                                <button onClick={async () => {
+                                    await fetch(`${API}/api/discovery/suggested/${s.id}/reject`, { method: "POST" });
+                                    fetchSuggestions();
+                                }} style={{ flex: 1, background: "rgba(255,59,48,0.1)", color: "#FF3B30", border: "1px solid rgba(255,59,48,0.3)", padding: "6px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>Reject</button>
+                            </div>
+                        </div>
+                    ))}
+                    {suggestions.length === 0 && (
+                        <div style={{ gridColumn: "1 / -1", background: "#14141F", border: "1px solid rgba(255,255,255,.06)", borderRadius: "14px", padding: "40px", textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: "13px" }}>
+                            No pending artist suggestions. Run the A&R Agent to find new talent.
+                        </div>
+                    )}
                 </div>
             </div>
 

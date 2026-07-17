@@ -56,6 +56,11 @@ def init_db():
         conn.execute("ALTER TABLE songs ADD COLUMN sentiment_summary TEXT")
         conn.commit()
         print("[migration] Added sentiment columns to songs")
+        
+    if "themes" not in song_cols:
+        conn.execute("ALTER TABLE songs ADD COLUMN themes TEXT")
+        conn.commit()
+        print("[migration] Added themes column to songs")
 
     # Composite indexes for the dashboard's hot queries (latest snapshot per
     # song by platform, songs by artist+platform, alerts by platform)
@@ -109,15 +114,16 @@ def upsert_artist(conn, artist: dict):
 def upsert_song(conn, song: dict):
     """Insert or update a song."""
     conn.execute(
-        """INSERT INTO songs (id, artist_id, title, platform, platform_id, album_name, release_date, thumbnail_url, sentiment_score, sentiment_summary)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO songs (id, artist_id, title, platform, platform_id, album_name, release_date, thumbnail_url, sentiment_score, sentiment_summary, themes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(platform, platform_id) DO UPDATE SET
              title=excluded.title,
              album_name=excluded.album_name,
              release_date=excluded.release_date,
              thumbnail_url=excluded.thumbnail_url,
              sentiment_score=COALESCE(excluded.sentiment_score, songs.sentiment_score),
-             sentiment_summary=COALESCE(excluded.sentiment_summary, songs.sentiment_summary)""",
+             sentiment_summary=COALESCE(excluded.sentiment_summary, songs.sentiment_summary),
+             themes=COALESCE(excluded.themes, songs.themes)""",
         (
             song["id"],
             song["artist_id"],
@@ -129,6 +135,7 @@ def upsert_song(conn, song: dict):
             song.get("thumbnail_url"),
             song.get("sentiment_score"),
             song.get("sentiment_summary"),
+            song.get("themes"),
         ),
     )
 

@@ -1775,6 +1775,90 @@ def get_song_history(song_id: str):
         "alerts": [dict(a) for a in alerts]
     }
 
+# ─── A&R Discovery Agent ──────────────────────────────────────
+
+@app.get("/api/discovery/suggested")
+def get_suggested_artists():
+    conn = get_connection()
+    artists = conn.execute("""
+        SELECT * FROM suggested_artists WHERE status = 'pending' ORDER BY created_at DESC
+    """).fetchall()
+    conn.close()
+    return {"suggestions": rows_to_list(artists)}
+
+@app.post("/api/discovery/suggested/{suggestion_id}/approve")
+def approve_suggestion(suggestion_id: int):
+    conn = get_connection()
+    suggestion = conn.execute("SELECT * FROM suggested_artists WHERE id = ?", (suggestion_id,)).fetchone()
+    if not suggestion:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+    name = suggestion["name"]
+    
+    # Generate an ID for the artists table
+    import re
+    base_id = re.sub(r'[^a-z0-9]', '', name.lower())
+    new_id = base_id
+    
+    counter = 1
+    while conn.execute("SELECT id FROM artists WHERE id = ?", (new_id,)).fetchone():
+        new_id = f"{base_id}{counter}"
+        counter += 1
+        
+    try:
+        conn.execute(
+            "INSERT INTO artists (id, name, is_watched) VALUES (?, ?, 1)",
+            (new_id, name)
+        )
+        conn.execute(
+            "UPDATE suggested_artists SET status = 'approved' WHERE id = ?",
+            (suggestion_id,)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    conn.close()
+    
+    # Trigger DB sync
+    import threading
+    from sync import upload_db
+    threading.Thread(target=upload_db, daemon=True).start()
+    
+    return {"status": "success", "artist_id": new_id, "name": name}
+
+@app.post("/api/discovery/suggested/{suggestion_id}/reject")
+def reject_suggestion(suggestion_id: int):
+    conn = get_connection()
+    conn.execute("UPDATE suggested_artists SET status = 'rejected' WHERE id = ?", (suggestion_id,))
+    conn.commit()
+    conn.close()
+    
+    import threading
+    from sync import upload_db
+    threading.Thread(target=upload_db, daemon=True).start()
+    
+    return {"status": "success"}
+
+@app.post("/api/refresh/discovery")
+def refresh_discovery():
+    import subprocess
+    import threading
+    from sync import upload_db
+    
+    def run_discovery():
+        script_path = Path(__file__).parent.parent / "collector" / "discover_artists.py"
+        try:
+            subprocess.run(["python", str(script_path)], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running discovery script: {e}")
+        finally:
+            upload_db()
+            
+    threading.Thread(target=run_discovery, daemon=True).start()
+    return {"status": "running"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -133,7 +133,7 @@ export default function SongAnalyticsPage() {
       {/* Audience Sentiment */}
       {song.sentiment_summary && (
         <div style={{ marginBottom: "20px" }}>
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "16px", padding: "16px", display: "flex", gap: "16px", alignItems: "center" }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "16px", padding: "16px", display: "flex", gap: "16px", alignItems: "flex-start" }}>
             <div style={{ 
               width: "48px", height: "48px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               background: song.sentiment_score > 0.3 ? "rgba(52,199,89,0.15)" : song.sentiment_score < -0.3 ? "rgba(255,59,48,0.15)" : "rgba(255,255,255,0.1)",
@@ -142,9 +142,25 @@ export default function SongAnalyticsPage() {
             }}>
               {song.sentiment_score > 0.3 ? "😊" : song.sentiment_score < -0.3 ? "😠" : "😐"}
             </div>
-            <div>
-              <div style={{ fontSize: "15px", fontWeight: 600, marginBottom: "2px" }}>Audience Sentiment: {song.sentiment_summary}</div>
-              <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Based on AI analysis of recent YouTube comments (Score: {song.sentiment_score})</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "15px", fontWeight: 600, marginBottom: "4px" }}>Audience Sentiment: {song.sentiment_summary}</div>
+              <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>Based on AI analysis of recent YouTube comments (Score: {song.sentiment_score})</div>
+              
+              {/* Themes */}
+              {song.themes && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  {(typeof song.themes === 'string' ? JSON.parse(song.themes || '[]') : song.themes).map((t, idx) => (
+                    <div key={idx} style={{ 
+                      display: "flex", alignItems: "center", gap: "6px", 
+                      background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", 
+                      borderRadius: "20px", padding: "4px 10px", fontSize: "11px", fontWeight: 500 
+                    }}>
+                      <span style={{ color: "var(--text-primary)" }}>{t.theme}</span>
+                      <span style={{ color: "#FF8A3D" }}>{t.percentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

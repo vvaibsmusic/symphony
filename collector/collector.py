@@ -153,7 +153,13 @@ def collect_youtube_data(fast_mode: bool = False):
                         sentiment_data = analyze_comments(top_comments)
                         sentiment_score = sentiment_data.get("score")
                         sentiment_summary = sentiment_data.get("summary")
+                        import json
+                        themes = json.dumps(sentiment_data.get("themes", [])) if sentiment_data.get("themes") else None
                         time.sleep(2) # rate limiting for Gemini
+                    else:
+                        themes = None
+                else:
+                    themes = None
                         
                 # Upsert the song
                 upsert_song(conn, {
@@ -167,6 +173,7 @@ def collect_youtube_data(fast_mode: bool = False):
                     "thumbnail_url": thumbnail,
                     "sentiment_score": sentiment_score,
                     "sentiment_summary": sentiment_summary,
+                    "themes": themes,
                 })
 
                 # Get previous snapshot for viral detection
