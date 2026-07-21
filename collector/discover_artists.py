@@ -52,9 +52,9 @@ def extract_artists_with_langchain(posts: list[dict]) -> list[dict]:
     if not posts:
         return []
         
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        logging.error("GEMINI_API_KEY not found.")
+        logging.error("GEMINI_API_KEY or GOOGLE_API_KEY not found.")
         return []
 
     client = genai.Client(api_key=api_key)

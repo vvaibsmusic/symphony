@@ -9,9 +9,9 @@ def analyze_comments(comments: list[str]) -> dict:
     if not comments:
         return {"score": 0.0, "summary": "No comments available.", "themes": []}
         
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        logging.warning("GEMINI_API_KEY is not set. Skipping sentiment analysis.")
+        logging.warning("GEMINI_API_KEY or GOOGLE_API_KEY is not set. Skipping sentiment analysis.")
         return {"score": 0.0, "summary": "Sentiment analysis unavailable (missing API key).", "themes": []}
         
     try:

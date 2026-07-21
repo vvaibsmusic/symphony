@@ -26,9 +26,9 @@ def get_db():
     return conn
 
 def run_predictions():
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("GEMINI_API_KEY is not set. Cannot run predictions.")
+        print("GEMINI_API_KEY or GOOGLE_API_KEY is not set. Cannot run predictions.")
         return
 
     conn = get_db()
