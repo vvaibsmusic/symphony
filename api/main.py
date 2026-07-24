@@ -1769,8 +1769,14 @@ def get_song_history(song_id: str):
     
     conn.close()
     
+    song_dict = dict(song)
+    if song_dict.get("sentiment_summary") == "Sentiment analysis unavailable (missing API key).":
+        song_dict["sentiment_summary"] = None
+        song_dict["sentiment_score"] = None
+        song_dict["themes"] = None
+
     return {
-        "song": dict(song),
+        "song": song_dict,
         "history": [dict(s) for s in snapshots],
         "alerts": [dict(a) for a in alerts]
     }

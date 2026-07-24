@@ -83,7 +83,30 @@ def extract_artists_with_langchain(posts: list[dict]) -> list[dict]:
                 response_mime_type="application/json",
             ),
         )
-        data = json.loads(response.text)
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        
+        # Check if the JSON is truncated or has trailing commas
+        if text.endswith(","):
+            text = text[:-1] + "]" # Simple fix for truncated arrays
+            
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            logging.warning(f"Failed to parse JSON, attempting repair: {e}")
+            import ast
+            try:
+                # Sometimes ast.literal_eval can parse slightly malformed JSON/dicts
+                data = ast.literal_eval(text)
+            except Exception:
+                raise e
+                
         if isinstance(data, list):
             return data
         elif isinstance(data, dict) and "artists" in data:

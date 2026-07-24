@@ -34,7 +34,16 @@ def analyze_comments(comments: list[str]) -> dict:
             ),
         )
         
-        data = json.loads(response.text)
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        
+        data = json.loads(text)
         return {
             "score": float(data.get("score", 0.0)),
             "summary": data.get("summary", "No summary provided."),
