@@ -112,21 +112,25 @@ export default function YouTubeDashboard() {
     };
 
     const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
             const statsRes = await fetch(`${API}/api/stats`).then(r => r.json()).catch(() => null);
             setStats(statsRes || null);
-            const viralRes = await fetch(`${API}/api/youtube/viral?limit=100`).then(r => r.json()).catch(() => ({ viral: [] }));
+            const viralRes = await fetch(`${API}/api/watchlist/viral`).then(r => r.json()).catch(() => ({ viral: [] }));
             setViral(viralRes.viral || []);
-            const growthRes = await fetch(`${API}/api/youtube/growth?limit=100`).then(r => r.json()).catch(() => ({ growth: [] }));
+            const growthRes = await fetch(`${API}/api/watchlist/growth?days=30`).then(r => r.json()).catch(() => ({ growth: [] }));
             setGrowth(growthRes.growth || []);
             const releasesRes = await fetch(`${API}/api/watchlist/releases?days=30`).then(r => r.json()).catch(() => ({ watched: [], other: [] }));
             setReleases([...(releasesRes.watched || []), ...(releasesRes.other || [])]);
+            const predRes = await fetch(`${API}/api/predictions?limit=10`).then(r => r.json()).catch(() => ({ predictions: [] }));
+            setPredictions(predRes.predictions || []);
             const quotaRes = await fetch(`${API}/api/quota`).then(r => r.json()).catch(() => null);
             setQuota(quotaRes || null);
         } catch (e) {
-            console.error("Failed to fetch dashboard stats:", e);
+            console.error(e);
         }
-    }, []);
+        setLoading(false);
+    }, [page, search, sortBy, sortDir, favOnly, genreFilter, regionFilter]);
 
     const fetchArtists = useCallback(async () => {
         setLoading(true);
@@ -180,7 +184,7 @@ export default function YouTubeDashboard() {
         { label: 'TOTAL ARTISTS', val: formatNumber(stats?.total_artists || 0), delta: '+4 wk', color: '#E9E9F2', spark: sp([60,62,61,66,68,70,72,78]) },
     ];
 
-    let filteredSongs = leaderboardMode === "viral" ? (viral || []) : (growth || []);
+    let filteredSongs = leaderboardMode === "viral" ? (viral || []) : leaderboardMode === "growth" ? (growth || []) : (predictions || []);
     if (songSearch) {
         filteredSongs = filteredSongs.filter(v => 
             (v.title || "").toLowerCase().includes(songSearch.toLowerCase()) || 
@@ -206,7 +210,7 @@ export default function YouTubeDashboard() {
             }
             return songSortDir === 'desc' ? valB - valA : valA - valB;
         });
-    } else {
+    } else if (leaderboardMode === "growth") {
         filteredSongs = [...filteredSongs].sort((a, b) => {
             let valA, valB;
             if (songSortBy === 'spike') {
@@ -218,6 +222,15 @@ export default function YouTubeDashboard() {
             } else if (songSortBy === 'curr') {
                 valA = a.current_views || 0;
                 valB = b.current_views || 0;
+            }
+            return songSortDir === 'desc' ? valB - valA : valA - valB;
+        });
+    } else {
+        filteredSongs = [...filteredSongs].sort((a, b) => {
+            let valA, valB;
+            if (songSortBy === 'conf') {
+                valA = a.confidence_score || 0;
+                valB = b.confidence_score || 0;
             }
             return songSortDir === 'desc' ? valB - valA : valA - valB;
         });
@@ -234,6 +247,8 @@ export default function YouTubeDashboard() {
         daily_growth: v.daily_growth ? `+${formatNumber(v.daily_growth)}` : null,
         monthly_growth: v.monthly_growth ? `+${formatNumber(v.monthly_growth)}` : null,
         current_views: v.current_views ? formatNumber(v.current_views) : null,
+        confidence: v.confidence_score ? `${v.confidence_score}%` : null,
+        reason: v.prediction_reason || null,
         ini: getInitials(v.artist_name),
         grad: getGrad(v.artist_id),
         img: v.artist_image || v.thumbnail_url,
@@ -408,6 +423,7 @@ export default function YouTubeDashboard() {
                             <div style={{ display: "flex", gap: "2px", alignItems: "center", background: "rgba(255,255,255,.05)", borderRadius: "6px", padding: "2px", marginRight: "8px" }}>
                                 <button onClick={() => setLeaderboardMode("viral")} style={{ background: leaderboardMode === "viral" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "viral" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "viral" ? 600 : 400 }}>Viral</button>
                                 <button onClick={() => setLeaderboardMode("growth")} style={{ background: leaderboardMode === "growth" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "growth" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "growth" ? 600 : 400 }}>Growth</button>
+                                <button onClick={() => setLeaderboardMode("predictions")} style={{ background: leaderboardMode === "predictions" ? "rgba(255,255,255,.1)" : "transparent", color: leaderboardMode === "predictions" ? "#FFF" : "rgba(255,255,255,.4)", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer", transition: "all 0.2s", fontWeight: leaderboardMode === "predictions" ? 600 : 400 }}>AI Preds</button>
                             </div>
                             <input 
                                 value={songSearch} 
@@ -415,7 +431,7 @@ export default function YouTubeDashboard() {
                                 placeholder="Search..."
                                 style={{ background: "rgba(255,255,255,.05)", border: "none", outline: "none", color: "#E9E9F2", fontSize: "12px", padding: "4px 8px", borderRadius: "4px", width: "90px" }}
                             />
-                            {(leaderboardMode === "viral" ? [{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}] : [{k: 'spike', l: '1D'}, {k: 'prev', l: '30D'}, {k: 'curr', l: 'Total'}]).map(s => (
+                            {(leaderboardMode === "viral" ? [{k: 'spike', l: 'Spike'}, {k: 'prev', l: 'Prev'}, {k: 'curr', l: 'Curr'}] : leaderboardMode === "growth" ? [{k: 'spike', l: '1D'}, {k: 'prev', l: '30D'}, {k: 'curr', l: 'Total'}] : [{k: 'conf', l: 'Conf'}]).map(s => (
                                 <button key={s.k} onClick={() => {
                                     if (songSortBy === s.k) setSongSortDir(d => d === 'desc' ? 'asc' : 'desc');
                                     else { setSongSortBy(s.k); setSongSortDir('desc'); }
@@ -436,7 +452,7 @@ export default function YouTubeDashboard() {
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", fontFamily: "Poppins, sans-serif" }}>
                                 <thead style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-secondary)" }}>
                                     <tr>
-                                        {(leaderboardMode === "viral" ? ["#", "Track", "Spike", "Views"] : ["#", "Track", "1-Day", "30-Day", "Total"]).map((h, i) => (
+                                        {(leaderboardMode === "viral" ? ["#", "Track", "Spike", "Views"] : leaderboardMode === "growth" ? ["#", "Track", "1-Day", "30-Day", "Total"] : ["#", "Track", "Conf", "Reason"]).map((h, i) => (
                                             <th
                                                 key={i}
                                                 style={{
@@ -489,17 +505,23 @@ export default function YouTubeDashboard() {
                                                         <span style={{ background: "rgba(255, 0, 0, 0.15)", color: "var(--yt-red)", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
                                                             🔥 {h.mult}
                                                         </span>
-                                                    ) : (
+                                                    ) : leaderboardMode === "growth" ? (
                                                         <span style={{ color: "#5BE08A", fontWeight: 600, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                             {h.daily_growth || "—"}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ background: "rgba(91, 224, 138, 0.15)", color: "#5BE08A", padding: "2px 8px", borderRadius: 12, fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
+                                                            {h.confidence || "—"}
                                                         </span>
                                                     )}
                                                 </td>
                                                 <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                                                     {leaderboardMode === "viral" ? (
                                                         <>{h.from} <span style={{ color: "var(--text-muted)", margin: "0 2px" }}>→</span> {h.to}</>
-                                                    ) : (
+                                                    ) : leaderboardMode === "growth" ? (
                                                         <span style={{ color: "var(--text-secondary)" }}>{h.monthly_growth || "—"}</span>
+                                                    ) : (
+                                                        <span style={{ color: "var(--text-secondary)", whiteSpace: "normal", fontSize: "0.75rem", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textAlign: "left", maxWidth: "200px" }}>{h.reason || "—"}</span>
                                                     )}
                                                 </td>
                                                 {leaderboardMode === "growth" && (
